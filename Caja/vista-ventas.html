@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vista de Ventas</title>
+    <link rel="stylesheet" href="css/ventas.css?v=3">
+</head>
+<body>
+    <div class="page">
+        <header class="header">
+            <div>
+                <h1>Ventas</h1>
+            </div>
+            <span class="pill">Panel de ventas</span>
+        </header>
+
+        <main class="layout">
+            <section class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2>Ventas realizadas</h2>
+                    </div>
+                    <div class="search-box">
+                        <input id="sales-search" class="search-input" type="search" placeholder="Buscar por hora, producto o precio" aria-label="Buscar ventas">
+                    </div>
+                </div>
+                <div class="list" id="active-sales-list"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2>Ventas canceladas</h2>
+                    </div>
+                    <span class="pill danger">Canceladas</span>
+                </div>
+                <div class="list" id="canceled-sales-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <div class="backdrop" id="backdrop"></div>
+
+    <div class="modal" id="sale-modal" aria-hidden="true">
+        <div class="modal-card" id="sale-modal-card">
+            <div class="modal-head">
+                <div>
+                    <h2 id="sale-modal-title">Detalle de venta</h2>
+                    <p class="muted" id="sale-modal-meta"></p>
+                </div>
+                <button class="btn-outline" onclick="closeSaleModal()">Cerrar</button>
+            </div>
+            <div class="modal-body" id="sale-modal-body"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="cancel-modal" aria-hidden="true">
+        <div class="modal-card big">
+            <div class="modal-body">
+                <div class="confirm-box">
+                    <div class="pill danger" style="margin-bottom:12px;">Accion irreversible</div>
+                    <h2>Seguro de que quiere cancelar esta venta?</h2>
+                    <p class="muted" id="cancel-modal-text" style="line-height:1.6;">Esta accion movera la venta al listado de canceladas.</p>
+                    <div class="detail-actions" style="margin-top:18px; justify-content:flex-end;">
+                        <button class="btn-soft" onclick="closeCancelModal()">No, volver</button>
+                        <button class="btn-danger" onclick="confirmCancelSale()">Si, cancelar venta</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/ventas.js?v=3"></script>
+</body>
+</html>

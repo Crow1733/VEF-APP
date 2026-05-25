@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vista de Caja</title>
+    <link rel="stylesheet" href="css/caja.css?v=3">
+</head>
+<body>
+    <div class="page">
+        <header class="header">
+            <div>
+                <h1>Caja</h1>
+            </div>
+            <div class="header-actions">
+                <button id="theme-toggle" class="btn-theme" type="button" aria-label="Cambiar tema" title="Cambiar tema">
+                    <span class="theme-icon">🌙</span>
+                </button>
+                <span class="pill">Caja #1</span>
+            </div>
+        </header>
+
+        <main class="layout">
+            <section class="panel products-panel">
+                <div class="panel-header">
+                    <div>
+                        <h2>Productos disponibles</h2>
+                        <p>Busca por nombre para encontrar productos más rápido.</p>
+                    </div>
+                    <div class="search-box">
+                        <input id="product-search" class="search-input" type="search" placeholder="Buscar producto..." aria-label="Buscar producto">
+                    </div>
+                </div>
+                <div class="products-grid" id="products-grid"></div>
+            </section>
+
+            <section class="panel right-panel order-panel">
+                <details class="order-drawer" open>
+                    <summary class="panel-header order-summary">
+                        <div>
+                            <h2>Pedido actual</h2>
+                            <p>Productos agregados en la venta en curso.</p>
+                        </div>
+                        <div class="order-summary-actions">
+                            <button class="btn-outline order-size-btn" type="button" onclick="toggleOrderPanelSize(event)">Más grande</button>
+                            <span class="pill">Activo</span>
+                        </div>
+                    </summary>
+                    <div class="right-content" id="right-content">
+                        <div class="order-content-head">
+                            <h3>Pedido Actual</h3>
+                            <p class="muted">Revisa y ajusta los productos agregados.</p>
+                        </div>
+                    </div>
+                </details>
+            </section>
+        </main>
+    </div>
+
+    <div class="backdrop" id="backdrop"></div>
+
+    <div class="modal" id="sale-details-modal" aria-hidden="true">
+        <div class="modal-card" id="sale-details-card">
+            <div class="modal-head">
+                <div>
+                    <h2 id="sale-details-title">Detalle de venta</h2>
+                    <p class="muted" id="sale-details-meta"></p>
+                </div>
+                <button class="btn-outline" onclick="closeModal('sale-details-modal')">Cerrar</button>
+            </div>
+            <div class="modal-body" id="sale-details-body"></div>
+        </div>
+    </div>
+
+    <script src="js/caja.js?v=3"></script>
+</body>
+</html>

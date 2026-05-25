@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso</title>
+    <link rel="stylesheet" href="login.css">
+</head>
+<body data-root="../">
+    <div class="page">
+        <header class="hero">
+            <span class="chip">Acceso seguro</span>
+            <h1>Panel de acceso</h1>
+            <p>Inicia sesion para abrir la vista correspondiente a tu perfil.</p>
+        </header>
+
+        <main class="card">
+            <div class="card-head">
+                <h2>Iniciar sesion</h2>
+                <p class="muted">Usa un usuario de prueba del archivo users.json.</p>
+            </div>
+            <form id="login-form" class="form">
+                <label>
+                    Usuario
+                    <input type="text" id="username" autocomplete="username" required>
+                </label>
+                <label>
+                    Contrasena
+                    <input type="password" id="password" autocomplete="current-password" required>
+                </label>
+                <button class="btn" type="submit">Entrar</button>
+                <div class="error" id="login-error" role="alert"></div>
+            </form>
+        </main>
+    </div>
+
+    <script src="login.js"></script>
+</body>
+</html>

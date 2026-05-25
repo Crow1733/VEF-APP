@@ -1,0 +1,16 @@
+[
+    {
+        "username": "admin",
+        "password": "admin123",
+        "role": "admin",
+        "displayName": "Administrador",
+        "home": "Administrador/administrador-manager.html"
+    },
+    {
+        "username": "caja",
+        "password": "caja123",
+        "role": "cajero",
+        "displayName": "Caja",
+        "home": "Caja/caja-manager.html"
+    }
+]

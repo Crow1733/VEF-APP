@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vista Global</title>
+    <link rel="stylesheet" href="css/global.css?v=2">
+</head>
+<body>
+    <div class="topbar">
+        <button class="nav-tab active" id="button-caja" onclick="loadView('vista-caja.html', this)">Caja</button>
+        <button class="nav-tab" id="button-ventas" onclick="loadView('vista-ventas.html', this)">Ventas</button>
+        <button class="nav-tab logout" type="button" onclick="appLogout()">Cerrar sesion</button>
+    </div>
+
+    <iframe id="viewer-frame" class="view-shell" src="vista-caja.html" title="Vista de operacion"></iframe>
+
+    <script src="../js/auth-guard.js" data-roles="cajero" data-root="../" data-login="../login.html"></script>
+    <script src="js/global.js?v=2"></script>
+</body>
+</html>
