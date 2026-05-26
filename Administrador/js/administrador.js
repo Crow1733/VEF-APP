@@ -120,6 +120,7 @@ let sales = [
 
 let stockMovements = [];
 let pendingProductDeleteId = null;
+const WITHDRAWALS_KEY = 'directWithdrawals';
 
 function formatDateTime(value) {
     return new Intl.DateTimeFormat('es-ES', {
@@ -267,6 +268,51 @@ function renderReports() {
                 </div>
             `;
         })
+        .join('');
+}
+
+function loadWithdrawals() {
+    try {
+        const raw = localStorage.getItem(WITHDRAWALS_KEY);
+        if (!raw) {
+            return [];
+        }
+        const data = JSON.parse(raw);
+        return Array.isArray(data) ? data : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function renderWithdrawals() {
+    const list = document.getElementById('withdrawal-report-list');
+    if (!list) {
+        return;
+    }
+
+    const withdrawals = loadWithdrawals();
+    if (!withdrawals.length) {
+        list.innerHTML = '<div class="empty-state">No hay extracciones registradas.</div>';
+        return;
+    }
+
+    list.innerHTML = withdrawals
+        .map((item) => `
+            <div class="report-card">
+                <div class="report-head">
+                    <div>
+                        <strong>Extraccion ${item.id}</strong>
+                        <span class="muted">${item.user || 'Caja'}</span>
+                    </div>
+                    <span class="report-tag exit">Retiro</span>
+                </div>
+                <div class="report-meta">
+                    <span class="report-delta exit">-${formatMoney(item.amount)}</span>
+                    <span>${item.note || 'Sin motivo'}</span>
+                    <span>${formatDateTime(item.createdAt)}</span>
+                </div>
+            </div>
+        `)
         .join('');
 }
 
@@ -864,6 +910,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderProducts();
     renderSales();
     renderUsers();
+    renderReports();
+    renderWithdrawals();
 
     window.editProduct = editProduct;
     window.deleteProduct = deleteProduct;

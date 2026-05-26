@@ -55,6 +55,8 @@ let selectedSaleSource = null;
 let editingSaleId = null;
 let saleToCancel = null;
 let salesSearchTerm = '';
+const WITHDRAWALS_KEY = 'directWithdrawals';
+let activeSection = 'active';
 
 function money(value) {
     return new Intl.NumberFormat('es-ES').format(value);
@@ -69,6 +71,96 @@ function formatDateTime(value) {
 
 function normalizeText(value) {
     return value.toString().toLowerCase().trim();
+}
+
+function readSession() {
+    try {
+        const raw = localStorage.getItem('appSession');
+        if (!raw) {
+            return null;
+        }
+        const data = JSON.parse(raw);
+        if (!data || typeof data !== 'object') {
+            return null;
+        }
+        return data;
+    } catch (error) {
+        return null;
+    }
+}
+
+function loadWithdrawals() {
+    try {
+        const raw = localStorage.getItem(WITHDRAWALS_KEY);
+        if (!raw) {
+            return [];
+        }
+        const data = JSON.parse(raw);
+        return Array.isArray(data) ? data : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function saveWithdrawals(list) {
+    localStorage.setItem(WITHDRAWALS_KEY, JSON.stringify(list));
+}
+
+function renderWithdrawals() {
+    const list = document.getElementById('withdrawal-list');
+    if (!list) {
+        return;
+    }
+
+    const withdrawals = loadWithdrawals();
+    if (!withdrawals.length) {
+        list.innerHTML = '<div class="empty-state">No hay extracciones registradas.</div>';
+        return;
+    }
+
+    list.innerHTML = withdrawals
+        .map((item) => `
+            <article class="sale-card">
+                <div class="sale-card-header">
+                    <div>
+                        <strong>${formatDateTime(item.createdAt)}</strong>
+                        <span class="muted">${item.user || 'Caja'}</span>
+                    </div>
+                    <span class="pill">$${money(item.amount)}</span>
+                </div>
+                <div class="muted">${item.note || 'Sin motivo'}</div>
+            </article>
+        `)
+        .join('');
+}
+
+function registerWithdrawal(event) {
+    event.preventDefault();
+    const amountInput = document.getElementById('withdrawal-amount');
+    const noteInput = document.getElementById('withdrawal-note');
+    const error = document.getElementById('withdrawal-error');
+
+    const amount = Number(amountInput.value || 0);
+    if (Number.isNaN(amount) || amount <= 0) {
+        error.textContent = 'Ingresa un monto valido.';
+        return;
+    }
+
+    const session = readSession();
+    const withdrawals = loadWithdrawals();
+    withdrawals.unshift({
+        id: `EXT-${Date.now()}`,
+        amount,
+        note: noteInput.value.trim(),
+        user: session?.displayName || session?.username || 'Caja',
+        createdAt: new Date().toISOString()
+    });
+
+    saveWithdrawals(withdrawals);
+    amountInput.value = '';
+    noteInput.value = '';
+    error.textContent = '';
+    renderWithdrawals();
 }
 
 function saleMatchesSearch(sale, searchTerm) {
@@ -116,6 +208,20 @@ function saleMatchesSearch(sale, searchTerm) {
 function renderLists() {
     renderActiveSales();
     renderCanceledSales();
+}
+
+function setActiveSection(section) {
+    activeSection = section;
+    document.querySelectorAll('.op-tab').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.section === section);
+        tab.setAttribute('aria-selected', tab.dataset.section === section ? 'true' : 'false');
+    });
+    document.querySelectorAll('.op-section').forEach((panel) => {
+        const isActive = panel.dataset.section === section;
+        panel.classList.toggle('active', isActive);
+        panel.hidden = !isActive;
+        panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+    });
 }
 
 function renderActiveSales() {
@@ -361,6 +467,17 @@ function closeCancelModal() {
 
 document.addEventListener('DOMContentLoaded', () => {
     renderLists();
+    renderWithdrawals();
+    setActiveSection(activeSection);
+    document.querySelectorAll('.op-tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+            setActiveSection(tab.dataset.section);
+        });
+    });
+    const form = document.getElementById('withdrawal-form');
+    if (form) {
+        form.addEventListener('submit', registerWithdrawal);
+    }
     document.getElementById('backdrop').addEventListener('click', () => {
         closeSaleModal();
         closeCancelModal();

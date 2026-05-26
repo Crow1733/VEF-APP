@@ -3,23 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vista de Ventas</title>
+    <title>Vista de Operaciones</title>
     <link rel="stylesheet" href="css/ventas.css?v=3">
 </head>
 <body>
     <div class="page">
         <header class="header">
             <div>
-                <h1>Ventas</h1>
+                <h1>Operaciones</h1>
             </div>
-            <span class="pill">Panel de ventas</span>
+            <span class="pill">Panel de operaciones</span>
         </header>
 
+        <div class="op-tabs" id="op-tabs">
+            <button class="op-tab active" type="button" data-section="active" aria-controls="op-section-active">Operaciones realizadas</button>
+            <button class="op-tab" type="button" data-section="canceled" aria-controls="op-section-canceled">Operaciones canceladas</button>
+            <button class="op-tab" type="button" data-section="withdrawals" aria-controls="op-section-withdrawals">Extracciones directas</button>
+        </div>
+
         <main class="layout">
-            <section class="panel">
+            <section class="panel op-section active" data-section="active" id="op-section-active">
                 <div class="panel-header">
                     <div>
-                        <h2>Ventas realizadas</h2>
+                        <h2>Operaciones realizadas</h2>
                     </div>
                     <div class="search-box">
                         <input id="sales-search" class="search-input" type="search" placeholder="Buscar por hora, producto o precio" aria-label="Buscar ventas">
@@ -28,14 +34,40 @@
                 <div class="list" id="active-sales-list"></div>
             </section>
 
-            <section class="panel">
+            <section class="panel op-section" data-section="canceled" id="op-section-canceled" hidden>
                 <div class="panel-header">
                     <div>
-                        <h2>Ventas canceladas</h2>
+                        <h2>Operaciones canceladas</h2>
                     </div>
                     <span class="pill danger">Canceladas</span>
                 </div>
                 <div class="list" id="canceled-sales-list"></div>
+            </section>
+
+            <section class="panel op-section" data-section="withdrawals" id="op-section-withdrawals" hidden>
+                <div class="panel-header">
+                    <div>
+                        <h2>Extracciones directas</h2>
+                        <p class="muted">Registra retiros de caja para seguimiento administrativo.</p>
+                    </div>
+                </div>
+                <div class="list">
+                    <form class="withdrawal-form" id="withdrawal-form">
+                        <label>
+                            Monto
+                            <input id="withdrawal-amount" class="edit-input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0">
+                        </label>
+                        <label>
+                            Motivo (opcional)
+                            <input id="withdrawal-note" class="edit-input" type="text" maxlength="120" placeholder="Ej: Retiro de caja">
+                        </label>
+                        <div class="withdrawal-actions">
+                            <button class="btn-primary" type="submit">Registrar extraccion</button>
+                        </div>
+                        <div class="form-error" id="withdrawal-error" role="alert"></div>
+                    </form>
+                    <div class="withdrawal-list" id="withdrawal-list"></div>
+                </div>
             </section>
         </main>
     </div>
