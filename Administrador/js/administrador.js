@@ -47,10 +47,15 @@ let products = [
 ];
 
 let users = [
-    { id: 'USR-1', name: 'admin', role: 'admin', createdAt: '2026-01-01T08:00:00' },
-    { id: 'USR-2', name: 'Lucia Perez', role: 'cajero', createdAt: '2026-03-05T12:30:00' },
-    { id: 'USR-3', name: 'Carlos Mora', role: 'supervisor', createdAt: '2026-04-12T16:10:00' }
+    { id: 'USR-1', name: 'admin', role: 'admin', password: 'admin123', createdAt: '2026-01-01T08:00:00' },
+    { id: 'USR-2', name: 'Lucia Perez', role: 'cajero', password: 'caja123', createdAt: '2026-03-05T12:30:00' },
+    { id: 'USR-3', name: 'Carlos Mora', role: 'cajero', password: 'caja456', createdAt: '2026-04-12T16:10:00' }
 ];
+
+const ROLE_LABELS = {
+    admin: 'Administrador',
+    cajero: 'Cajero'
+};
 
 let sales = [
     {
@@ -114,6 +119,7 @@ let sales = [
 ];
 
 let stockMovements = [];
+let pendingProductDeleteId = null;
 
 function formatDateTime(value) {
     return new Intl.DateTimeFormat('es-ES', {
@@ -329,7 +335,7 @@ function renderProducts() {
 
     const filtered = applyProductFilters(products);
     if (!filtered.length) {
-        body.innerHTML = '<tr><td colspan="12"><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr>';
+        body.innerHTML = '<tr class="table-empty-row"><td colspan="12"><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr>';
         return;
     }
 
@@ -337,18 +343,18 @@ function renderProducts() {
         .sort((a, b) => a.id.localeCompare(b.id))
         .map((product) => `
             <tr>
-                <td>${product.id}</td>
-                <td>${product.name}</td>
-                <td>${product.category || 'Sin categoria'}</td>
-                <td>${formatMoney(product.purchasePrice)}</td>
-                <td>${formatMoney(product.salePrice)}</td>
-                <td>${product.discountPrice ? formatMoney(product.discountPrice) : '-'}</td>
-                <td>${product.stock}</td>
-                <td>${product.sales ?? 0}</td>
-                <td><span class="badge ${product.visibleInStore ? 'visible' : 'hidden'}">${product.visibleInStore ? 'Visible' : 'Oculto'}</span></td>
-                <td>${formatDateTime(product.createdAt)}</td>
-                <td>${formatDateTime(product.updatedAt)}</td>
-                <td>
+                <td data-label="ID">${product.id}</td>
+                <td data-label="Nombre">${product.name}</td>
+                <td data-label="Categoria">${product.category || 'Sin categoria'}</td>
+                <td data-label="Compra">${formatMoney(product.purchasePrice)}</td>
+                <td data-label="Venta">${formatMoney(product.salePrice)}</td>
+                <td data-label="Rebaja">${product.discountPrice ? formatMoney(product.discountPrice) : '-'}</td>
+                <td data-label="Stock">${product.stock}</td>
+                <td data-label="Ventas">${product.sales ?? 0}</td>
+                <td data-label="Tienda"><span class="badge ${product.visibleInStore ? 'visible' : 'hidden'}">${product.visibleInStore ? 'Visible' : 'Oculto'}</span></td>
+                <td data-label="Creación">${formatDateTime(product.createdAt)}</td>
+                <td data-label="Actualización">${formatDateTime(product.updatedAt)}</td>
+                <td data-label="Acciones">
                     <div class="row-actions">
                         <button class="btn" onclick="editProduct('${product.id}')">Editar</button>
                         <button class="btn" onclick="toggleProductVisibility('${product.id}')">${product.visibleInStore ? 'Ocultar' : 'Mostrar'}</button>
@@ -504,14 +510,51 @@ function editProduct(productId) {
     document.getElementById('stock').value = product.stock;
     document.getElementById('show-in-store').checked = product.visibleInStore;
     setProductFormVisibility(true);
+
+    requestAnimationFrame(() => {
+        const formCard = document.getElementById('product-form-card');
+        if (formCard) {
+            formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        document.getElementById('product-name').focus();
+    });
 }
 
-function deleteProduct(productId) {
+function openDeleteProductModal(productId) {
+    const product = products.find((item) => item.id === productId);
+    if (!product) {
+        return;
+    }
+
+    pendingProductDeleteId = product.id;
+    document.getElementById('delete-product-title').textContent = `Eliminar ${product.name}`;
+    document.getElementById('delete-product-text').textContent = `El producto ${product.id} se eliminará de forma permanente.`;
+    openModal('delete-product-modal', 'delete-product-backdrop');
+}
+
+function closeDeleteProductModal() {
+    pendingProductDeleteId = null;
+    closeModal('delete-product-modal', 'delete-product-backdrop');
+}
+
+function confirmDeleteProduct() {
+    if (!pendingProductDeleteId) {
+        return;
+    }
+
+    const productId = pendingProductDeleteId;
+    pendingProductDeleteId = null;
     products = products.filter((item) => item.id !== productId);
     if (state.editingProductId === productId) {
         resetProductForm();
     }
+    closeDeleteProductModal();
     renderProducts();
+}
+
+function deleteProduct(productId) {
+    openDeleteProductModal(productId);
 }
 
 function toggleProductVisibility(productId) {
@@ -640,37 +683,80 @@ function showSaleDetails(saleId) {
     openModal();
 }
 
-function openModal() {
+function openModal(modalId = 'sale-details-modal', backdropId = 'modal-backdrop') {
     document.body.classList.add('modal-open');
-    document.getElementById('sale-details-modal').classList.add('show');
-    document.getElementById('sale-details-modal').setAttribute('aria-hidden', 'false');
+    document.getElementById(backdropId).classList.add('show');
+    document.getElementById(modalId).classList.add('show');
+    document.getElementById(modalId).setAttribute('aria-hidden', 'false');
 }
 
-function closeModal() {
-    document.getElementById('sale-details-modal').classList.remove('show');
-    document.getElementById('sale-details-modal').setAttribute('aria-hidden', 'true');
+function closeModal(modalId = 'sale-details-modal', backdropId = 'modal-backdrop') {
+    document.getElementById(modalId).classList.remove('show');
+    document.getElementById(modalId).setAttribute('aria-hidden', 'true');
     document.body.classList.remove('modal-open');
+    document.getElementById(backdropId).classList.remove('show');
+}
+
+function setUserFormError(message) {
+    const errorEl = document.getElementById('user-form-error');
+    if (!errorEl) {
+        return;
+    }
+    if (!message) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+        return;
+    }
+    errorEl.textContent = message;
+    errorEl.classList.remove('hidden');
 }
 
 function setupUsersForm() {
     const form = document.getElementById('user-form');
     form.addEventListener('submit', (event) => {
         event.preventDefault();
+        setUserFormError('');
 
         const name = document.getElementById('user-name').value.trim();
         const role = document.getElementById('user-role').value;
+        const password = document.getElementById('user-password').value;
+        const passwordConfirm = document.getElementById('user-password-confirm').value;
+
         if (!name) {
+            setUserFormError('El nombre es obligatorio.');
             return;
         }
 
-        if (state.editingUserId) {
+        const isEditing = Boolean(state.editingUserId);
+
+        if (!isEditing && !password) {
+            setUserFormError('La contraseña es obligatoria al crear un usuario.');
+            return;
+        }
+
+        if (password && password.length < 4) {
+            setUserFormError('La contraseña debe tener al menos 4 caracteres.');
+            return;
+        }
+
+        if (password && password !== passwordConfirm) {
+            setUserFormError('Las contraseñas no coinciden.');
+            return;
+        }
+
+        if (isEditing) {
             const index = users.findIndex((item) => item.id === state.editingUserId);
             if (index >= 0) {
-                users[index] = { ...users[index], name, role };
+                users[index] = {
+                    ...users[index],
+                    name,
+                    role,
+                    ...(password ? { password } : {})
+                };
             }
         } else {
             const id = generateId('USR', users.length + 1);
-            users.push({ id, name, role, createdAt: new Date().toISOString() });
+            users.push({ id, name, role, password, createdAt: new Date().toISOString() });
         }
 
         resetUserForm();
@@ -683,7 +769,7 @@ function setupUsersForm() {
 function renderUsers() {
     const body = document.getElementById('users-table-body');
     if (!users.length) {
-        body.innerHTML = '<tr><td colspan="5"><div class="empty-state">No hay usuarios registrados.</div></td></tr>';
+        body.innerHTML = '<tr class="table-empty-row"><td colspan="5"><div class="empty-state">No hay usuarios registrados.</div></td></tr>';
         return;
     }
 
@@ -691,11 +777,11 @@ function renderUsers() {
         .sort((a, b) => a.id.localeCompare(b.id))
         .map((user) => `
             <tr>
-                <td>${user.id}</td>
-                <td>${user.name}</td>
-                <td>${user.role}</td>
-                <td>${formatDateTime(user.createdAt)}</td>
-                <td>
+                <td data-label="ID">${user.id}</td>
+                <td data-label="Nombre">${user.name}</td>
+                <td data-label="Rol">${ROLE_LABELS[user.role] || user.role}</td>
+                <td data-label="Creación">${formatDateTime(user.createdAt)}</td>
+                <td data-label="Acciones">
                     <div class="row-actions">
                         <button class="btn" onclick="editUser('${user.id}')">Editar</button>
                         <button class="btn danger" onclick="deleteUser('${user.id}')" ${user.role === 'admin' ? 'disabled' : ''}>Eliminar</button>
@@ -711,6 +797,11 @@ function resetUserForm() {
     document.getElementById('user-form-title').textContent = 'Crear usuario';
     document.getElementById('user-form').reset();
     document.getElementById('user-role').value = 'admin';
+    setUserFormError('');
+    const hint = document.getElementById('user-password-hint');
+    if (hint) {
+        hint.textContent = '';
+    }
 }
 
 function editUser(userId) {
@@ -723,6 +814,18 @@ function editUser(userId) {
     document.getElementById('user-form-title').textContent = `Editar usuario ${user.id}`;
     document.getElementById('user-name').value = user.name;
     document.getElementById('user-role').value = user.role;
+    document.getElementById('user-password').value = '';
+    document.getElementById('user-password-confirm').value = '';
+    setUserFormError('');
+
+    const hint = document.getElementById('user-password-hint');
+    if (hint) {
+        hint.textContent = '(dejar vacío para mantener la actual)';
+    }
+
+    requestAnimationFrame(() => {
+        document.getElementById('user-name').focus();
+    });
 }
 
 function deleteUser(userId) {
@@ -741,6 +844,10 @@ function deleteUser(userId) {
 function setupModalEvents() {
     document.getElementById('close-modal').addEventListener('click', closeModal);
     document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+    document.getElementById('close-delete-product-modal').addEventListener('click', closeDeleteProductModal);
+    document.getElementById('cancel-delete-product').addEventListener('click', closeDeleteProductModal);
+    document.getElementById('confirm-delete-product').addEventListener('click', confirmDeleteProduct);
+    document.getElementById('delete-product-backdrop').addEventListener('click', closeDeleteProductModal);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -760,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.editProduct = editProduct;
     window.deleteProduct = deleteProduct;
+    window.openDeleteProductModal = openDeleteProductModal;
     window.toggleProductVisibility = toggleProductVisibility;
     window.showSaleDetails = showSaleDetails;
     window.editUser = editUser;

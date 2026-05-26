@@ -182,9 +182,17 @@
                             <select id="user-role">
                                 <option value="admin">Administrador</option>
                                 <option value="cajero">Cajero</option>
-                                <option value="supervisor">Supervisor</option>
                             </select>
                         </label>
+                        <label>
+                            Contraseña <span class="muted" id="user-password-hint"></span>
+                            <input type="password" id="user-password" autocomplete="new-password">
+                        </label>
+                        <label>
+                            Repetir contraseña
+                            <input type="password" id="user-password-confirm" autocomplete="new-password">
+                        </label>
+                        <p class="form-error hidden" id="user-form-error"></p>
                         <div class="actions-row">
                             <button type="submit" class="btn primary">Guardar usuario</button>
                             <button type="button" class="btn" id="cancel-user-edit">Cancelar edición</button>
@@ -221,6 +229,25 @@
                 <button class="btn" id="close-modal">Cerrar</button>
             </div>
             <div class="modal-content" id="modal-content"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="delete-product-modal" aria-hidden="true">
+        <div class="modal-backdrop" id="delete-product-backdrop"></div>
+        <div class="modal-card confirm-card">
+            <div class="modal-head">
+                <h3 id="delete-product-title">Eliminar producto</h3>
+                <button class="btn" id="close-delete-product-modal">Cerrar</button>
+            </div>
+            <div class="modal-content">
+                <div class="confirm-box">
+                    <p class="muted" id="delete-product-text">Esta acción no se puede deshacer.</p>
+                    <div class="detail-actions">
+                        <button class="btn" id="cancel-delete-product">Cancelar</button>
+                        <button class="btn danger" id="confirm-delete-product">Sí, borrar producto</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
