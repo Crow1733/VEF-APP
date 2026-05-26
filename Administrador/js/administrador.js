@@ -161,12 +161,17 @@ function setProductFormVisibility(isVisible) {
     state.productFormVisible = isVisible;
     const formCard = document.getElementById('product-form-card');
     const panelGrid = document.getElementById('products-panel-grid');
+    const toggleButton = document.getElementById('toggle-product-form');
 
     if (formCard) {
         formCard.classList.toggle('hidden', !isVisible);
     }
     if (panelGrid) {
         panelGrid.classList.toggle('single-column', !isVisible);
+    }
+    if (toggleButton) {
+        toggleButton.textContent = isVisible ? 'Ocultar formulario' : 'Crear producto';
+        toggleButton.setAttribute('aria-expanded', String(isVisible));
     }
 }
 
@@ -407,6 +412,9 @@ function setupProductForm() {
     });
 
     document.getElementById('cancel-product-edit').addEventListener('click', resetProductForm);
+    document.getElementById('toggle-product-form').addEventListener('click', () => {
+        setProductFormVisibility(!state.productFormVisible);
+    });
 }
 
 function updateProductFiltersUI() {
@@ -742,6 +750,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSalesFilters();
     setupUsersForm();
     setupModalEvents();
+
+    const isMobileViewport = window.matchMedia('(max-width: 760px)').matches;
+    setProductFormVisibility(!isMobileViewport);
 
     renderProducts();
     renderSales();
