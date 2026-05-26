@@ -633,6 +633,7 @@ function showSaleDetails(saleId) {
 }
 
 function openModal() {
+    document.body.classList.add('modal-open');
     document.getElementById('sale-details-modal').classList.add('show');
     document.getElementById('sale-details-modal').setAttribute('aria-hidden', 'false');
 }
@@ -640,6 +641,7 @@ function openModal() {
 function closeModal() {
     document.getElementById('sale-details-modal').classList.remove('show');
     document.getElementById('sale-details-modal').setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
 }
 
 function setupUsersForm() {

@@ -220,6 +220,18 @@ function renderSaleModalBody() {
                                 <input class="edit-input" id="edit-qty-${index}" type="number" min="1" value="${item.qty}">
                             </div>
                         </div>
+                        <div class="detail-row" style="grid-template-columns:1fr 140px;">
+                            <div>
+                                <div class="muted">Metodo de pago</div>
+                            </div>
+                            <div>
+                                <label class="muted" for="edit-payment-${index}">Pago</label>
+                                <select class="edit-input" id="edit-payment-${index}">
+                                    <option value="Efectivo" ${item.payment === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
+                                    <option value="Transferencia" ${item.payment === 'Transferencia' ? 'selected' : ''}>Transferencia</option>
+                                </select>
+                            </div>
+                        </div>
                     ` : `
                         <div class="detail-row">
                             <div>
@@ -268,7 +280,9 @@ function saveEditedSale() {
     const updatedItems = selectedSale.items.map((item, index) => {
         const input = document.getElementById(`edit-qty-${index}`);
         const qty = Math.max(1, parseInt(input.value, 10) || 1);
-        return { ...item, qty };
+        const paymentInput = document.getElementById(`edit-payment-${index}`);
+        const payment = paymentInput ? paymentInput.value : item.payment;
+        return { ...item, qty, payment };
     });
 
     const updatedTotal = updatedItems.reduce((sum, item) => sum + (item.qty * item.price), 0);
@@ -320,6 +334,7 @@ function confirmCancelSale() {
 }
 
 function openModal(id) {
+    document.body.classList.add('modal-open');
     document.getElementById('backdrop').classList.add('show');
     document.getElementById(id).classList.add('show');
     document.getElementById(id).setAttribute('aria-hidden', 'false');
@@ -330,6 +345,7 @@ function closeSaleModal() {
     document.getElementById('sale-modal').setAttribute('aria-hidden', 'true');
     if (!document.getElementById('cancel-modal').classList.contains('show')) {
         document.getElementById('backdrop').classList.remove('show');
+        document.body.classList.remove('modal-open');
     }
 }
 
@@ -339,6 +355,7 @@ function closeCancelModal() {
     saleToCancel = null;
     if (!document.getElementById('sale-modal').classList.contains('show')) {
         document.getElementById('backdrop').classList.remove('show');
+        document.body.classList.remove('modal-open');
     }
 }
 

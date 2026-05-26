@@ -2,45 +2,50 @@
 
 :root {
     color-scheme: light dark;
-    --bg: #fbfaf7;
-    --bg-accent-1: rgba(15, 118, 110, 0.16);
-    --bg-accent-2: rgba(245, 158, 11, 0.18);
+    --bg: #fff9e6;
+    --bg-accent-1: rgba(244, 180, 0, 0.18);
+    --bg-accent-2: rgba(31, 111, 120, 0.18);
     --surface: #ffffff;
-    --surface-strong: #fdfbf7;
-    --text: #1b1f24;
-    --muted: #5a6573;
-    --primary: #0f766e;
-    --primary-strong: #0b5f59;
-    --secondary: #f59e0b;
-    --success: #16a34a;
-    --danger: #dc2626;
-    --border: #dbe2ea;
-    --shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
-    --ring: 0 0 0 3px rgba(15, 118, 110, 0.2);
+    --surface-strong: #fffdf5;
+    --text: #1f1f1f;
+    --muted: #5f6b72;
+    --primary: #f4b400;
+    --primary-strong: #d48a00;
+    --secondary: #1f6f78;
+    --success: #2f9e44;
+    --danger: #d64545;
+    --border: #f0d9a6;
+    --shadow: 0 24px 60px rgba(31, 31, 31, 0.12);
+    --ring: 0 0 0 3px rgba(244, 180, 0, 0.3);
     --radius-lg: 20px;
     --radius-md: 14px;
     --radius-sm: 12px;
     --font-sans: "Space Grotesk", "Trebuchet MS", "Segoe UI", sans-serif;
     --font-display: "Unbounded", "Space Grotesk", sans-serif;
+    --ease-smooth: cubic-bezier(0.22, 0.61, 0.36, 1);
+    --ease-soft: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-fast: 140ms;
+    --duration-base: 220ms;
+    --duration-slow: 320ms;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --bg: #172025;
-        --bg-accent-1: rgba(45, 212, 191, 0.2);
-        --bg-accent-2: rgba(245, 158, 11, 0.16);
-        --surface: #1c2830;
-        --surface-strong: #22313a;
-        --text: #f0f5fb;
-        --muted: #b6c2cf;
-        --primary: #2dd4bf;
-        --primary-strong: #14b8a6;
-        --secondary: #fbbf24;
-        --success: #4ade80;
-        --danger: #f87171;
-        --border: #2f404a;
+        --bg: #1c1a14;
+        --bg-accent-1: rgba(244, 180, 0, 0.18);
+        --bg-accent-2: rgba(31, 111, 120, 0.18);
+        --surface: #26221b;
+        --surface-strong: #2e2a22;
+        --text: #f7f2e6;
+        --muted: #c9c1b1;
+        --primary: #f6c445;
+        --primary-strong: #e0a72a;
+        --secondary: #4fb7c0;
+        --success: #6bdc8b;
+        --danger: #f17d7d;
+        --border: #3a3327;
         --shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-        --ring: 0 0 0 3px rgba(45, 212, 191, 0.3);
+        --ring: 0 0 0 3px rgba(244, 180, 0, 0.35);
     }
 }
 
@@ -71,7 +76,7 @@ body {
     backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
-    animation: slideDown 0.25s ease;
+    animation: slideDown var(--duration-base) var(--ease-soft);
 }
 
 .topbar .logout {
@@ -88,7 +93,10 @@ body {
     font: inherit;
     font-weight: 700;
     white-space: nowrap;
-    transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+    transition: transform var(--duration-fast) var(--ease-smooth),
+        box-shadow var(--duration-base) var(--ease-smooth),
+        background var(--duration-base) var(--ease-smooth),
+        color var(--duration-base) var(--ease-smooth);
 }
 
 .nav-tab:hover {
@@ -115,6 +123,16 @@ body {
 .nav-tab:focus-visible {
     outline: none;
     box-shadow: var(--ring);
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
 }
 
 .view-shell {
@@ -156,7 +174,7 @@ body {
 @keyframes slideDown {
     from {
         opacity: 0;
-        transform: translateY(-6px);
+        transform: translateY(-4px);
     }
     to {
         opacity: 1;

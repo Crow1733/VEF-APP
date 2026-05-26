@@ -13,9 +13,6 @@
                 <h1>Caja</h1>
             </div>
             <div class="header-actions">
-                <button id="theme-toggle" class="btn-theme" type="button" aria-label="Cambiar tema" title="Cambiar tema">
-                    <span class="theme-icon">🌙</span>
-                </button>
                 <span class="pill">Caja #1</span>
             </div>
         </header>
@@ -69,6 +66,54 @@
                 <button class="btn-outline" onclick="closeModal('sale-details-modal')">Cerrar</button>
             </div>
             <div class="modal-body" id="sale-details-body"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="payment-modal" aria-hidden="true">
+        <div class="modal-card" id="payment-modal-card">
+            <div class="modal-head">
+                <div>
+                    <h2>Finalizar pago</h2>
+                    <p class="muted">Indica el reparto entre efectivo y transferencia.</p>
+                </div>
+                <button class="btn-outline" onclick="closePaymentModal()">Cerrar</button>
+            </div>
+            <div class="modal-body">
+                <div class="payment-bar" aria-hidden="true">
+                    <div class="payment-bar-track" id="payment-bar-track">
+                        <div class="payment-bar-cash" id="payment-bar-cash"></div>
+                        <div class="payment-bar-transfer" id="payment-bar-transfer"></div>
+                        <div class="payment-bar-handle" id="payment-bar-handle"></div>
+                    </div>
+                    <div class="payment-bar-legend">
+                        <span>Efectivo</span>
+                        <span>Transferencia</span>
+                    </div>
+                </div>
+                <div class="payment-grid">
+                    <label class="payment-row">
+                        Efectivo
+                        <input id="payment-cash" class="edit-input" type="number" min="0" step="0.01" inputmode="decimal">
+                    </label>
+                    <label class="payment-row">
+                        Transferencia
+                        <input id="payment-transfer" class="edit-input" type="number" min="0" step="0.01" inputmode="decimal">
+                    </label>
+                </div>
+                <div class="payment-summary">
+                    <span>Total venta</span>
+                    <strong id="payment-total">$0</strong>
+                </div>
+                <div class="payment-summary muted">
+                    <span>Asignado</span>
+                    <strong id="payment-assigned">$0</strong>
+                </div>
+                <div class="payment-error" id="payment-error" role="alert"></div>
+                <div class="footer-actions">
+                    <button class="btn-ghost" type="button" onclick="closePaymentModal()">Cancelar</button>
+                    <button class="btn-primary" type="button" onclick="confirmPaymentSplit()">Confirmar venta</button>
+                </div>
+            </div>
         </div>
     </div>
 
