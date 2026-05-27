@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vista de Caja</title>
-    <link rel="stylesheet" href="css/caja.css?v=3">
+    <link rel="stylesheet" href="css/caja.css?v=4">
 </head>
 <body>
     <div class="page">
@@ -31,25 +31,10 @@
                 <div class="products-grid" id="products-grid"></div>
             </section>
 
-            <section class="panel right-panel order-panel">
-                <details class="order-drawer" open>
-                    <summary class="panel-header order-summary">
-                        <div>
-                            <h2>Pedido actual</h2>
-                            <p>Productos agregados en la venta en curso.</p>
-                        </div>
-                        <div class="order-summary-actions">
-                            <button class="btn-outline order-size-btn" type="button" onclick="toggleOrderPanelSize(event)">Más grande</button>
-                            <span class="pill">Activo</span>
-                        </div>
-                    </summary>
-                    <div class="right-content" id="right-content">
-                        <div class="order-content-head">
-                            <h3>Pedido Actual</h3>
-                            <p class="muted">Revisa y ajusta los productos agregados.</p>
-                        </div>
-                    </div>
-                </details>
+            <section class="panel order-panel" id="order-panel">
+                <button class="panel-header order-toggle" id="order-toggle" type="button">
+                    <span class="order-toggle-label">Pedido actual</span>
+                </button>
             </section>
         </main>
     </div>
@@ -66,6 +51,19 @@
                 <button class="btn-outline" onclick="closeModal('sale-details-modal')">Cerrar</button>
             </div>
             <div class="modal-body" id="sale-details-body"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="order-modal" aria-hidden="true">
+        <div class="modal-card" id="order-modal-card">
+            <div class="modal-head">
+                <div>
+                    <h2>Pedido actual</h2>
+                    <p class="muted">Revisa y ajusta los productos agregados.</p>
+                </div>
+                <button class="btn-outline" onclick="closeOrderModal()">Cerrar</button>
+            </div>
+            <div class="modal-body" id="order-modal-content"></div>
         </div>
     </div>
 

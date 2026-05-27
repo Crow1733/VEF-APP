@@ -36,9 +36,9 @@ let historySales = [
 let currentMode = 'sale';
 let detailSaleId = null;
 let productSearchTerm = '';
-let orderPanelSize = 'large';
 let pendingSale = null;
 let isDraggingPaymentBar = false;
+let orderSearchTerm = '';
 
 function money(value) {
     return new Intl.NumberFormat('es-ES').format(value);
@@ -202,20 +202,24 @@ function openSaleDetails(saleId) {
 }
 
 function renderRightPanel() {
-    const content = document.getElementById('right-content');
+    const content = document.getElementById('order-modal-content');
     renderCartPanel(content);
 }
 
 function renderCartPanel(container) {
     const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    const filteredCart = cart.filter((item) =>
+        item.name.toLowerCase().includes(orderSearchTerm.toLowerCase())
+    );
 
     container.innerHTML = `
-        <div class="order-content-head">
-            <h3>Pedido Actual</h3>
-            <p class="muted">Revisa y ajusta los productos agregados.</p>
+        <div class="order-content-head compact">
+            <div class="order-search-wrap">
+                <input id="order-search" class="order-search" type="search" placeholder="Buscar en pedido..." aria-label="Buscar en pedido">
+            </div>
         </div>
         <div class="cart-list">
-            ${cart.length ? cart.map((item, index) => `
+            ${filteredCart.length ? filteredCart.map((item, index) => `
                 <div class="cart-card">
                     <div class="card-top">
                         <div>
@@ -236,7 +240,7 @@ function renderCartPanel(container) {
                         </div>
                     </div>
                 </div>
-            `).join('') : '<div class="empty-state">No hay productos cargados en la venta actual.</div>'}
+            `).join('') : '<div class="empty-state">No hay productos que coincidan con la búsqueda.</div>'}
         </div>
         <div class="total-box">
             <span>Total</span>
@@ -244,38 +248,19 @@ function renderCartPanel(container) {
         </div>
         <button class="btn-primary" type="button" onclick="completeSale()">Completar venta</button>
     `;
-}
 
-function toggleOrderPanelSize(event) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
-
-    orderPanelSize = orderPanelSize === 'large' ? 'compact' : 'large';
-    const panel = document.querySelector('.right-panel');
-    if (!panel) {
-        return;
-    }
-
-    panel.classList.toggle('size-compact', orderPanelSize === 'compact');
-    panel.classList.toggle('size-large', orderPanelSize === 'large');
-
-    const button = document.querySelector('.order-size-btn');
-    if (button) {
-        button.textContent = orderPanelSize === 'compact' ? 'Más grande' : 'Más pequeño';
-    }
-}
-
-function syncOrderPanelSizeButton() {
-    const button = document.querySelector('.order-size-btn');
-    if (button) {
-        button.textContent = orderPanelSize === 'compact' ? 'Más grande' : 'Más pequeño';
+    const searchInput = document.getElementById('order-search');
+    if (searchInput) {
+        searchInput.value = orderSearchTerm;
+        searchInput.addEventListener('input', (event) => {
+            updateOrderSearch(event.target.value);
+        }, { once: true });
     }
 }
 
 function openModal(id) {
     document.body.classList.add('modal-open');
+    document.documentElement.classList.add('modal-open');
     document.getElementById('backdrop').classList.add('show');
     document.getElementById(id).classList.add('show');
     document.getElementById(id).setAttribute('aria-hidden', 'false');
@@ -287,6 +272,28 @@ function closeModal(id) {
     document.getElementById(id).setAttribute('aria-hidden', 'true');
     if (!document.getElementById('payment-modal').classList.contains('show')) {
         document.body.classList.remove('modal-open');
+        document.documentElement.classList.remove('modal-open');
+    }
+}
+
+function openOrderModal() {
+    renderRightPanel();
+    document.body.classList.add('modal-open');
+    document.documentElement.classList.add('modal-open');
+    document.getElementById('backdrop').classList.add('show');
+    const modal = document.getElementById('order-modal');
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeOrderModal() {
+    const modal = document.getElementById('order-modal');
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+    if (!document.getElementById('payment-modal').classList.contains('show')) {
+        document.getElementById('backdrop').classList.remove('show');
+        document.body.classList.remove('modal-open');
+        document.documentElement.classList.remove('modal-open');
     }
 }
 
@@ -319,6 +326,7 @@ function openPaymentModal(total) {
     modal.dataset.total = String(total);
     updateAssignedPayment();
     document.body.classList.add('modal-open');
+    document.documentElement.classList.add('modal-open');
     document.getElementById('backdrop').classList.add('show');
     modal.classList.add('show');
     modal.setAttribute('aria-hidden', 'false');
@@ -331,6 +339,7 @@ function closePaymentModal() {
     if (!document.getElementById('sale-details-modal').classList.contains('show')) {
         document.getElementById('backdrop').classList.remove('show');
         document.body.classList.remove('modal-open');
+        document.documentElement.classList.remove('modal-open');
     }
     pendingSale = null;
 }
@@ -483,17 +492,23 @@ function updateProductSearch(value) {
     renderProducts();
 }
 
+function updateOrderSearch(value) {
+    orderSearchTerm = value.trim();
+    renderRightPanel();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     renderProducts();
     renderRightPanel();
-    const panel = document.querySelector('.right-panel');
-    if (panel) {
-        const isMobile = window.matchMedia('(max-width: 760px)').matches;
-        orderPanelSize = isMobile ? 'compact' : 'large';
-        panel.classList.add(isMobile ? 'size-compact' : 'size-large');
+    const orderToggle = document.getElementById('order-toggle');
+    if (orderToggle) {
+        orderToggle.addEventListener('click', openOrderModal);
     }
-    syncOrderPanelSizeButton();
     document.getElementById('backdrop').addEventListener('click', () => {
+        if (document.getElementById('order-modal').classList.contains('show')) {
+            closeOrderModal();
+            return;
+        }
         if (document.getElementById('payment-modal').classList.contains('show')) {
             closePaymentModal();
             return;

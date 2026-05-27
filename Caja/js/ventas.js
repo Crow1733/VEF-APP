@@ -93,12 +93,39 @@ function loadWithdrawals() {
     try {
         const raw = localStorage.getItem(WITHDRAWALS_KEY);
         if (!raw) {
-            return [];
+            return [
+                {
+                    id: 'EXT-PRUEBA-1',
+                    amount: 2500,
+                    note: 'Extraccion de prueba',
+                    user: 'Caja',
+                    createdAt: new Date().toISOString()
+                }
+            ];
         }
         const data = JSON.parse(raw);
-        return Array.isArray(data) ? data : [];
+        if (Array.isArray(data) && data.length) {
+            return data;
+        }
+        return [
+            {
+                id: 'EXT-PRUEBA-1',
+                amount: 2500,
+                note: 'Extraccion de prueba',
+                user: 'Caja',
+                createdAt: new Date().toISOString()
+            }
+        ];
     } catch (error) {
-        return [];
+        return [
+            {
+                id: 'EXT-PRUEBA-1',
+                amount: 2500,
+                note: 'Extraccion de prueba',
+                user: 'Caja',
+                createdAt: new Date().toISOString()
+            }
+        ];
     }
 }
 
@@ -129,6 +156,7 @@ function renderWithdrawals() {
                     <span class="pill">$${money(item.amount)}</span>
                 </div>
                 <div class="muted">${item.note || 'Sin motivo'}</div>
+                <div class="muted">Fecha y hora: ${formatDateTime(item.createdAt)}</div>
             </article>
         `)
         .join('');

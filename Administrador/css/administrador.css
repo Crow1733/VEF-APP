@@ -317,6 +317,16 @@ thead th {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    text-align: center;
+}
+
+tbody td {
+    text-align: center;
+    vertical-align: middle;
+}
+
+tbody td .badge {
+    display: inline-flex;
 }
 
 th,
@@ -589,6 +599,7 @@ tbody tr {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+    justify-content: center;
 }
 
 @media (max-width: 980px) {

@@ -171,6 +171,18 @@ input[type="number"] {
     }
 }
 
+@media (max-width: 1024px) {
+    .topbar {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+
+    .nav-tab {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+}
+
 @keyframes slideDown {
     from {
         opacity: 0;
