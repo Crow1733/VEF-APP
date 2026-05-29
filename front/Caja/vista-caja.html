@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vista de Caja</title>
-    <link rel="stylesheet" href="css/caja.css?v=4">
+    <title>Punto de venta</title>
+    <link rel="stylesheet" href="css/caja.css?v=5">
 </head>
 <body>
     <div class="page">
         <header class="header">
             <div>
-                <h1>Caja</h1>
+                <h1>Punto de venta</h1>
+                <p class="muted" id="caja-status-line">Sin caja abierta. Abre una caja para registrar ventas.</p>
             </div>
             <div class="header-actions">
-                <span class="pill">Caja #1</span>
+                <span class="pill" id="caja-pill">Caja —</span>
             </div>
         </header>
 
@@ -22,12 +23,13 @@
                 <div class="panel-header">
                     <div>
                         <h2>Productos disponibles</h2>
-                        <p>Busca por nombre para encontrar productos más rápido.</p>
+                        <p>Filtra por categoría y busca por nombre. Las consignaciones se marcan en rojo.</p>
                     </div>
                     <div class="search-box">
                         <input id="product-search" class="search-input" type="search" placeholder="Buscar producto..." aria-label="Buscar producto">
                     </div>
                 </div>
+                <div class="category-filter" id="category-filter"></div>
                 <div class="products-grid" id="products-grid"></div>
             </section>
 
@@ -41,19 +43,6 @@
 
     <div class="backdrop" id="backdrop"></div>
 
-    <div class="modal" id="sale-details-modal" aria-hidden="true">
-        <div class="modal-card" id="sale-details-card">
-            <div class="modal-head">
-                <div>
-                    <h2 id="sale-details-title">Detalle de venta</h2>
-                    <p class="muted" id="sale-details-meta"></p>
-                </div>
-                <button class="btn-outline" onclick="closeModal('sale-details-modal')">Cerrar</button>
-            </div>
-            <div class="modal-body" id="sale-details-body"></div>
-        </div>
-    </div>
-
     <div class="modal" id="order-modal" aria-hidden="true">
         <div class="modal-card" id="order-modal-card">
             <div class="modal-head">
@@ -61,7 +50,7 @@
                     <h2>Pedido actual</h2>
                     <p class="muted">Revisa y ajusta los productos agregados.</p>
                 </div>
-                <button class="btn-outline" onclick="closeOrderModal()">Cerrar</button>
+                <button class="btn-outline" type="button" onclick="closeOrderModal()">Cerrar</button>
             </div>
             <div class="modal-body" id="order-modal-content"></div>
         </div>
@@ -74,7 +63,7 @@
                     <h2>Finalizar pago</h2>
                     <p class="muted">Indica el reparto entre efectivo y transferencia.</p>
                 </div>
-                <button class="btn-outline" onclick="closePaymentModal()">Cerrar</button>
+                <button class="btn-outline" type="button" onclick="closePaymentModal()">Cerrar</button>
             </div>
             <div class="modal-body">
                 <div class="payment-bar" aria-hidden="true">
@@ -115,6 +104,7 @@
         </div>
     </div>
 
-    <script src="js/caja.js?v=3"></script>
+    <script src="../js/api.js"></script>
+    <script src="js/caja.js?v=4"></script>
 </body>
 </html>

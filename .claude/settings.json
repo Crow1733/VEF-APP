@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m http.server 8765)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s -o /dev/null -w \"login: %{http_code}\\\\n\" http://localhost:8765/login/login.html)",
+      "Bash(curl -s -o /dev/null -w \"admin:  %{http_code}\\\\n\" http://localhost:8765/Administrador/administrador-manager.html)",
+      "Bash(curl -s -o /dev/null -w \"caja:   %{http_code}\\\\n\" http://localhost:8765/Caja/caja-manager.html)",
+      "Bash(kill 749111)",
+      "Bash(wait)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(node --check front/js/api.js)",
+      "Bash(node --check front/Administrador/js/administrador.js)",
+      "Bash(node --check front/Caja/js/caja.js)",
+      "Bash(GIT_EDITOR=true git rebase --continue)"
+    ]
+  }
+}

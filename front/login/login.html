@@ -3,21 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso</title>
+    <title>Acceso · VEF</title>
     <link rel="stylesheet" href="login.css">
 </head>
 <body data-root="../">
     <div class="page">
         <header class="hero">
             <span class="chip">Acceso seguro</span>
-            <h1>Panel de acceso</h1>
-            <p>Inicia sesion para abrir la vista correspondiente a tu perfil.</p>
+            <h1>Sistema VEF</h1>
+            <p>Inicia sesión para abrir el panel correspondiente a tu rol.</p>
         </header>
 
         <main class="card">
             <div class="card-head">
-                <h2>Iniciar sesion</h2>
-                <p class="muted">Usa un usuario de prueba del archivo users.json.</p>
+                <h2>Iniciar sesión</h2>
+                <p class="muted">Usuarios de prueba: <strong>admin / admin123</strong> · <strong>caja / caja123</strong></p>
             </div>
             <form id="login-form" class="form">
                 <label>
@@ -25,7 +25,7 @@
                     <input type="text" id="username" autocomplete="username" required>
                 </label>
                 <label>
-                    Contrasena
+                    Contraseña
                     <input type="password" id="password" autocomplete="current-password" required>
                 </label>
                 <button class="btn" type="submit">Entrar</button>
@@ -34,6 +34,7 @@
         </main>
     </div>
 
+    <script src="../js/api.js"></script>
     <script src="login.js"></script>
 </body>
 </html>

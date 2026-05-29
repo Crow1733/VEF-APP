@@ -67,6 +67,12 @@ body.modal-open {
     font-size: 26px;
 }
 
+.header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .main-tabs {
     display: flex;
     flex-wrap: nowrap;
@@ -308,6 +314,15 @@ input[type="file"]::file-selector-button:hover {
     height: 120px;
     object-fit: cover;
     border-radius: 10px;
+}
+
+.product-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-strong);
 }
 
 .actions-row {

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caja · VEF</title>
+    <link rel="stylesheet" href="css/global.css?v=3">
+</head>
+<body>
+    <div class="topbar">
+        <button class="nav-tab active" id="button-caja" type="button" onclick="loadView('vista-caja.html', this)">Punto de venta</button>
+        <button class="nav-tab" id="button-cierre" type="button" onclick="loadView('vista-cierre.html', this)">Apertura/Cierre</button>
+        <button class="nav-tab" id="button-ventas" type="button" onclick="loadView('vista-ventas.html', this)">Operaciones</button>
+        <button class="nav-tab" id="button-compras" type="button" onclick="loadView('vista-compras.html', this)">Compras</button>
+        <button class="nav-tab logout" type="button" onclick="appLogout()">Cerrar sesión</button>
+    </div>
+
+    <iframe id="viewer-frame" class="view-shell" src="vista-caja.html" title="Vista de operación"></iframe>
+
+    <script src="../js/auth-guard.js" data-roles="cajero" data-root="../" data-login="../login/login.html"></script>
+    <script src="js/global.js?v=3"></script>
+</body>
+</html>

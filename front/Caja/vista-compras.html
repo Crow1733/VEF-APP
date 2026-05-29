@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras de mercancía</title>
+    <link rel="stylesheet" href="css/caja.css?v=5">
+    <link rel="stylesheet" href="css/cierre.css?v=1">
+</head>
+<body>
+    <div class="page">
+        <header class="header">
+            <div>
+                <h1>Compras de mercancía</h1>
+                <p class="muted">Las compras descuentan del fondo de caja y reponen stock. No son gasto operativo.</p>
+            </div>
+            <span class="pill" id="compras-pill">—</span>
+        </header>
+
+        <main class="layout single">
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Nueva compra</h2>
+                </div>
+                <form id="compra-form" class="cierre-form">
+                    <label>
+                        Procedencia (texto libre)
+                        <input type="text" id="cp-procedencia" placeholder="Ej: mayorista del centro">
+                    </label>
+                    <label>
+                        Método de pago
+                        <select id="cp-metodo">
+                            <option value="efectivo">Efectivo</option>
+                            <option value="transferencia">Transferencia</option>
+                        </select>
+                    </label>
+                    <label class="inline-row">
+                        <input type="checkbox" id="cp-descuenta" checked>
+                        Descuenta del fondo de caja
+                    </label>
+                    <label>
+                        Observación
+                        <input type="text" id="cp-obs">
+                    </label>
+                    <div id="cp-items"></div>
+                    <div>
+                        <button type="button" class="btn-outline" id="cp-add-item">+ Agregar item</button>
+                    </div>
+                    <div class="total-box">
+                        <span>Total</span>
+                        <span id="cp-total">$0</span>
+                    </div>
+                    <div>
+                        <button class="btn-primary" type="submit">Registrar compra</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Historial de compras</h2>
+                </div>
+                <div class="list" id="compras-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script src="js/compras.js?v=1"></script>
+</body>
+</html>

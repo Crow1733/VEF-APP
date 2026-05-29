@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apertura / Cierre de caja</title>
+    <link rel="stylesheet" href="css/caja.css?v=5">
+    <link rel="stylesheet" href="css/cierre.css?v=1">
+</head>
+<body>
+    <div class="page">
+        <header class="header">
+            <div>
+                <h1>Apertura y cierre de caja</h1>
+                <p class="muted">Controla la apertura, el desglose de efectivo y el cierre del turno.</p>
+            </div>
+            <span class="pill" id="state-pill">—</span>
+        </header>
+
+        <main class="layout single">
+            <section class="panel" id="caja-state-panel">
+                <div class="panel-header">
+                    <h2 id="caja-state-title">Estado de caja</h2>
+                </div>
+                <div id="caja-state-body"></div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <h2>Histórico de cajas</h2>
+                </div>
+                <div class="list" id="historico-cajas"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="../js/api.js"></script>
+    <script src="js/cierre.js?v=1"></script>
+</body>
+</html>
