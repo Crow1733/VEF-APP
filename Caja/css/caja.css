@@ -206,6 +206,7 @@ html.modal-open {
     font-size: 14px;
 }
 
+
 .panel-header > div {
     min-width: 0;
 }
@@ -274,6 +275,32 @@ html.modal-open {
     gap: 12px;
 }
 
+.product-card-top {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 12px;
+    align-items: center;
+}
+
+.product-image {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    object-fit: cover;
+    background: var(--surface-strong);
+    border: 1px solid var(--border);
+}
+
+.product-info {
+    display: grid;
+    gap: 4px;
+}
+
+.product-actions {
+    display: grid;
+    gap: 10px;
+}
+
 .product-card h3,
 .cart-card h3,
 .sale-card h3,
@@ -287,6 +314,13 @@ html.modal-open {
     color: var(--primary);
     font-weight: 800;
     font-size: 18px;
+}
+
+.product-card .stock {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 4px;
 }
 
 .payment-type,
@@ -881,6 +915,16 @@ input[type="number"] {
 
     .search-input {
         width: 100%;
+    }
+
+    .product-card-top {
+        grid-template-columns: 64px 1fr;
+    }
+
+    .product-image {
+        width: 64px;
+        height: 64px;
+        border-radius: 14px;
     }
 
     .right-panel {

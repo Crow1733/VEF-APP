@@ -1,11 +1,49 @@
 const products = [
-    { id: 1, name: 'Hamburguesa Simple', price: 5000 },
-    { id: 2, name: 'Papas Fritas', price: 2500 },
-    { id: 3, name: 'Gaseosa Cola', price: 1500 },
-    { id: 4, name: 'Helado Vainilla', price: 3000 },
-    { id: 5, name: 'Pizza Muzzarella', price: 8000 },
-    { id: 6, name: 'Cerveza Artesanal', price: 4000 }
+    {
+        id: 1,
+        name: 'Hamburguesa Simple',
+        price: 5000,
+        stock: 42,
+        imageUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=400&q=80'
+    },
+    {
+        id: 2,
+        name: 'Papas Fritas',
+        price: 2500,
+        stock: 58,
+        imageUrl: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=400&q=80'
+    },
+    {
+        id: 3,
+        name: 'Gaseosa Cola',
+        price: 1500,
+        stock: 75,
+        imageUrl: 'https://images.unsplash.com/photo-1527266237111-a4989d028a77?auto=format&fit=crop&w=400&q=80'
+    },
+    {
+        id: 4,
+        name: 'Helado Vainilla',
+        price: 3000,
+        stock: 26,
+        imageUrl: 'https://images.unsplash.com/photo-1505252585461-04db1eb84625?auto=format&fit=crop&w=400&q=80'
+    },
+    {
+        id: 5,
+        name: 'Pizza Muzzarella',
+        price: 8000,
+        stock: 19,
+        imageUrl: 'https://images.unsplash.com/photo-1548365328-9f5473a9d00f?auto=format&fit=crop&w=400&q=80'
+    },
+    {
+        id: 6,
+        name: 'Cerveza Artesanal',
+        price: 4000,
+        stock: 33,
+        imageUrl: 'https://images.unsplash.com/photo-1516455207990-7a41ce80f7ee?auto=format&fit=crop&w=400&q=80'
+    }
 ];
+
+const PRODUCT_PLACEHOLDER = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=400&q=80';
 
 let cart = [
     { id: 1, name: 'Hamburguesa Simple', price: 5000, qty: 1, payment: 'Mixto' },
@@ -76,19 +114,26 @@ function renderProducts() {
         const card = document.createElement('article');
         card.className = 'product-card';
         card.innerHTML = `
-            <div>
-                <h3>${product.name}</h3>
-                <div class="price">$${money(product.price)}</div>
+            <div class="product-card-top">
+                <img class="product-image" src="${product.imageUrl || PRODUCT_PLACEHOLDER}" alt="${product.name}" loading="lazy">
+                <div class="product-info">
+                    <h3>${product.name}</h3>
+                    <div class="price">$${money(product.price)}</div>
+                    <div class="stock">Stock: ${Number(product.stock) || 0}</div>
+                </div>
             </div>
-            <div class="qty-control">
-                <button type="button" onclick="changeProductQty(${product.id}, -1)">-</button>
-                <input class="qty-input" id="qty-${product.id}" type="number" min="1" step="1" inputmode="numeric" value="1" onchange="setProductQty(${product.id}, this.value)">
-                <button type="button" onclick="changeProductQty(${product.id}, 1)">+</button>
+            <div class="product-actions">
+                <div class="qty-control">
+                    <button type="button" onclick="changeProductQty(${product.id}, -1)">-</button>
+                    <input class="qty-input" id="qty-${product.id}" type="number" min="1" step="1" inputmode="numeric" value="1" onchange="setProductQty(${product.id}, this.value)">
+                    <button type="button" onclick="changeProductQty(${product.id}, 1)">+</button>
+                </div>
+                <button class="btn-primary" type="button" onclick="addToCart(${product.id})">Agregar a venta</button>
             </div>
-            <button class="btn-primary" type="button" onclick="addToCart(${product.id})">Agregar a venta</button>
         `;
         grid.appendChild(card);
     });
+
 }
 
 function changeProductQty(productId, change) {

@@ -27,6 +27,7 @@ let products = [
         discountPrice: 6900,
         stock: 32,
         sales: 128,
+        imageData: '',
         visibleInStore: true,
         createdAt: '2026-05-10T08:30:00',
         updatedAt: '2026-05-22T11:15:00'
@@ -40,6 +41,7 @@ let products = [
         discountPrice: null,
         stock: 54,
         sales: 74,
+        imageData: '',
         visibleInStore: false,
         createdAt: '2026-05-11T10:00:00',
         updatedAt: '2026-05-21T17:50:00'
@@ -417,6 +419,11 @@ function resetProductForm() {
     document.getElementById('product-form-title').textContent = 'Crear producto';
     document.getElementById('product-form').reset();
     document.getElementById('show-in-store').checked = true;
+    const fileInput = document.getElementById('product-image-file');
+    if (fileInput) {
+        fileInput.value = '';
+    }
+    updateProductImagePreview('');
 }
 
 function setupProductForm() {
@@ -435,38 +442,116 @@ function setupProductForm() {
             visibleInStore: document.getElementById('show-in-store').checked
         };
 
+        const fileInput = document.getElementById('product-image-file');
+        const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+        const existingImageData = getEditingImageData();
+
         if (!data.name) {
             return;
         }
 
-        if (state.editingProductId) {
-            const index = products.findIndex((item) => item.id === state.editingProductId);
-            if (index >= 0) {
-                products[index] = {
-                    ...products[index],
-                    ...data,
-                    updatedAt: now
-                };
-            }
-        } else {
-            const id = generateId('PRD', products.length + 1001);
-            products.push({
-                id,
+        const saveProduct = (imageData) => {
+            const payload = {
                 ...data,
-                sales: 0,
-                createdAt: now,
-                updatedAt: now
-            });
+                imageData
+            };
+
+            if (state.editingProductId) {
+                const index = products.findIndex((item) => item.id === state.editingProductId);
+                if (index >= 0) {
+                    products[index] = {
+                        ...products[index],
+                        ...payload,
+                        updatedAt: now
+                    };
+                }
+            } else {
+                const id = generateId('PRD', products.length + 1001);
+                products.push({
+                    id,
+                    ...payload,
+                    sales: 0,
+                    createdAt: now,
+                    updatedAt: now
+                });
+            }
+
+            resetProductForm();
+            renderProducts();
+        };
+
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                saveProduct(String(reader.result || ''));
+            };
+            reader.onerror = () => {
+                saveProduct(existingImageData || '');
+            };
+            reader.readAsDataURL(file);
+            return;
         }
 
-        resetProductForm();
-        renderProducts();
+        saveProduct(existingImageData || '');
     });
+
+    const imageInput = document.getElementById('product-image-file');
+    if (imageInput) {
+        imageInput.addEventListener('change', (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (file) {
+                updateProductImagePreviewFromFile(file);
+                return;
+            }
+            updateProductImagePreview(getEditingImageData());
+        });
+    }
 
     document.getElementById('cancel-product-edit').addEventListener('click', resetProductForm);
     document.getElementById('toggle-product-form').addEventListener('click', () => {
         setProductFormVisibility(!state.productFormVisible);
     });
+}
+
+function getEditingImageData() {
+    if (!state.editingProductId) {
+        return '';
+    }
+    const product = products.find((item) => item.id === state.editingProductId);
+    return product ? product.imageData || '' : '';
+}
+
+function updateProductImagePreview(value) {
+    const preview = document.getElementById('product-image-preview');
+    if (!preview) {
+        return;
+    }
+
+    const img = preview.querySelector('img');
+    const src = value ? value.trim() : '';
+    if (!src) {
+        preview.classList.remove('show');
+        if (img) {
+            img.src = '';
+        }
+        return;
+    }
+
+    preview.classList.add('show');
+    if (img) {
+        img.src = src;
+    }
+}
+
+function updateProductImagePreviewFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+        updateProductImagePreview(String(reader.result || ''));
+    };
+    reader.onerror = () => {
+        updateProductImagePreview('');
+    };
+    reader.readAsDataURL(file);
 }
 
 function updateProductFiltersUI() {
@@ -554,7 +639,12 @@ function editProduct(productId) {
     document.getElementById('sale-price').value = product.salePrice;
     document.getElementById('discount-price').value = product.discountPrice ?? '';
     document.getElementById('stock').value = product.stock;
+    const fileInput = document.getElementById('product-image-file');
+    if (fileInput) {
+        fileInput.value = '';
+    }
     document.getElementById('show-in-store').checked = product.visibleInStore;
+    updateProductImagePreview(product.imageData || '');
     setProductFormVisibility(true);
 
     requestAnimationFrame(() => {

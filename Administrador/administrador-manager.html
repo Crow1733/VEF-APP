@@ -52,6 +52,14 @@
                             Stock
                             <input type="number" id="stock" min="0" step="1" required>
                         </label>
+                        <label>
+                            Foto (opcional)
+                            <input type="file" id="product-image-file" accept="image/*">
+                            <span class="muted">Subi una imagen para el producto.</span>
+                        </label>
+                        <div class="image-preview" id="product-image-preview" aria-hidden="true">
+                            <img src="" alt="Vista previa" loading="lazy">
+                        </div>
                         <label class="inline-row">
                             <input type="checkbox" id="show-in-store" checked>
                             Mostrar en tienda
