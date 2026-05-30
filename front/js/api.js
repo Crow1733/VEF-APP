@@ -6,7 +6,7 @@
  */
 (function () {
     const STORAGE_KEY = 'vefDataStore';
-    const SCHEMA_VERSION = 3;
+    const SCHEMA_VERSION = 4;
 
     const RAND_DELAY = 0;
     const wait = (value) => RAND_DELAY ? new Promise((r) => setTimeout(() => r(value), RAND_DELAY)) : Promise.resolve(value);
@@ -44,6 +44,14 @@
             { id: 1, nombre: 'Administrador', usuario: 'admin', clave: 'admin123', rol: 'admin', activo: 1, creado_en: daysAgoIso(60) },
             { id: 2, nombre: 'Lucía Pérez', usuario: 'caja', clave: 'caja123', rol: 'cajero', activo: 1, creado_en: daysAgoIso(40) },
             { id: 3, nombre: 'Carlos Mora', usuario: 'carlos', clave: 'caja456', rol: 'cajero', activo: 1, creado_en: daysAgoIso(20) }
+        ];
+
+        // Las 3 cajas físicas son fijas: Caja 1, Caja 2, Caja 3.
+        // Cada una guarda qué categorías de productos puede ver/vender.
+        const cajas_config = [
+            { id: 1, nombre: 'Caja 1', categorias_ids: [1, 2, 3, 4, 5, 6] },
+            { id: 2, nombre: 'Caja 2', categorias_ids: [1, 2, 3, 4] },
+            { id: 3, nombre: 'Caja 3', categorias_ids: [3, 4, 5, 6] }
         ];
 
         const cajaCerradaId = 1;
@@ -107,7 +115,7 @@
                 compras: 100, compra_detalle: 100, consignaciones: 100,
                 consignacion_detalle: 100, cierres_semanales: 100
             },
-            categorias, productos, usuarios, cajas, ventas, venta_detalle,
+            categorias, productos, usuarios, cajas_config, cajas, ventas, venta_detalle,
             movimientos_caja, compras, compra_detalle, consignaciones,
             consignacion_detalle,
             cierres_semanales: []
@@ -369,6 +377,52 @@
             compras_mercancia,
             pagos_varios,
             efectivo_esperado
+        };
+    }
+
+    // === Cajas configuradas (3 fijas) =======================================
+    const CAJAS_FIJAS = [
+        { id: 1, nombre: 'Caja 1' },
+        { id: 2, nombre: 'Caja 2' },
+        { id: 3, nombre: 'Caja 3' }
+    ];
+
+    function ensureCajasConfig(data) {
+        if (!Array.isArray(data.cajas_config) || data.cajas_config.length !== 3) {
+            const existentes = Array.isArray(data.cajas_config) ? data.cajas_config : [];
+            data.cajas_config = CAJAS_FIJAS.map((base) => {
+                const previa = existentes.find((c) => c && c.id === base.id);
+                return {
+                    id: base.id,
+                    nombre: base.nombre,
+                    categorias_ids: previa && Array.isArray(previa.categorias_ids) ? previa.categorias_ids : []
+                };
+            });
+            save(data);
+        }
+        return data.cajas_config;
+    }
+
+    const cajas_config = {
+        listar: () => {
+            const data = load();
+            return wait(ensureCajasConfig(data).map((c) => enriquecerCajaConfig(c, data)));
+        },
+        actualizarCategorias: (id, categorias_ids) => wait(withStore((data) => {
+            ensureCajasConfig(data);
+            const idx = data.cajas_config.findIndex((c) => c.id === id);
+            if (idx < 0) return null;
+            const limpio = Array.from(new Set((categorias_ids || []).map(Number).filter(Boolean)));
+            data.cajas_config[idx].categorias_ids = limpio;
+            return enriquecerCajaConfig(data.cajas_config[idx], data);
+        }))
+    };
+
+    function enriquecerCajaConfig(c, data) {
+        const cats = data.categorias.filter((cat) => c.categorias_ids.includes(cat.id));
+        return {
+            ...c,
+            categorias: cats.map((cat) => ({ id: cat.id, nombre: cat.nombre, es_consignacion: cat.es_consignacion }))
         };
     }
 
@@ -655,9 +709,9 @@
 
     // === Reportes ===========================================================
     const reportes = {
-        semanal: (desde, hasta) => wait(reporteSemanal(load(), desde, hasta)),
-        porCategoria: (desde, hasta) => wait(reportePorCategoria(load(), desde, hasta)),
-        utilidadPorProducto: (desde, hasta) => wait(reporteUtilidadProducto(load(), desde, hasta))
+        semanal: (desde, hasta, caja_id) => wait(reporteSemanal(load(), desde, hasta, caja_id)),
+        porCategoria: (desde, hasta, caja_id) => wait(reportePorCategoria(load(), desde, hasta, caja_id)),
+        utilidadPorProducto: (desde, hasta, caja_id) => wait(reporteUtilidadProducto(load(), desde, hasta, caja_id))
     };
 
     function inRange(fechaIso, desde, hasta) {
@@ -666,8 +720,15 @@
         return true;
     }
 
-    function reporteSemanal(data, desde, hasta) {
-        const ventasRango = data.ventas.filter((v) => v.estado !== 'cancelada' && inRange(v.fecha, desde, hasta));
+    function matchCaja(item, caja_id) {
+        if (caja_id == null) return true;
+        return item.caja_id === caja_id;
+    }
+
+    function reporteSemanal(data, desde, hasta, caja_id) {
+        const ventasRango = data.ventas.filter((v) =>
+            v.estado !== 'cancelada' && inRange(v.fecha, desde, hasta) && matchCaja(v, caja_id)
+        );
         const propias = ventasRango.filter((v) => !v.es_consignacion);
         const cons = ventasRango.filter((v) => v.es_consignacion);
 
@@ -679,16 +740,16 @@
         const utilidad_total = data.venta_detalle
             .filter((d) => {
                 const v = data.ventas.find((x) => x.id === d.venta_id);
-                return v && v.estado !== 'cancelada' && !v.es_consignacion && inRange(v.fecha, desde, hasta);
+                return v && v.estado !== 'cancelada' && !v.es_consignacion && inRange(v.fecha, desde, hasta) && matchCaja(v, caja_id);
             })
             .reduce((s, d) => s + d.ganancia_total, 0);
 
-        const movs = data.movimientos_caja.filter((m) => inRange(m.fecha, desde, hasta));
+        const movs = data.movimientos_caja.filter((m) => inRange(m.fecha, desde, hasta) && matchCaja(m, caja_id));
         const extracciones_total = movs.filter((m) => m.es_extraccion).reduce((s, m) => s + m.monto, 0);
         const compras_total = movs.filter((m) => m.es_compra_mercancia).reduce((s, m) => s + m.monto, 0);
 
         return {
-            desde, hasta,
+            desde, hasta, caja_id: caja_id || null,
             venta_total, transferencia_total, efectivo_total,
             extracciones_total, compras_total,
             consignacion_total, utilidad_total,
@@ -696,11 +757,11 @@
         };
     }
 
-    function reportePorCategoria(data, desde, hasta) {
+    function reportePorCategoria(data, desde, hasta, caja_id) {
         const acumulado = new Map();
         data.venta_detalle.forEach((d) => {
             const v = data.ventas.find((x) => x.id === d.venta_id);
-            if (!v || v.estado === 'cancelada' || !inRange(v.fecha, desde, hasta)) return;
+            if (!v || v.estado === 'cancelada' || !inRange(v.fecha, desde, hasta) || !matchCaja(v, caja_id)) return;
             const prod = data.productos.find((p) => p.id === d.producto_id);
             if (!prod) return;
             const cat = data.categorias.find((c) => c.id === prod.categoria_id);
@@ -718,11 +779,11 @@
         return Array.from(acumulado.values()).sort((a, b) => b.venta_total - a.venta_total);
     }
 
-    function reporteUtilidadProducto(data, desde, hasta) {
+    function reporteUtilidadProducto(data, desde, hasta, caja_id) {
         const acumulado = new Map();
         data.venta_detalle.forEach((d) => {
             const v = data.ventas.find((x) => x.id === d.venta_id);
-            if (!v || v.estado === 'cancelada' || !inRange(v.fecha, desde, hasta)) return;
+            if (!v || v.estado === 'cancelada' || !inRange(v.fecha, desde, hasta) || !matchCaja(v, caja_id)) return;
             const prod = data.productos.find((p) => p.id === d.producto_id);
             if (!prod) return;
             if (!acumulado.has(prod.id)) {
@@ -753,7 +814,7 @@
     }
 
     window.api = {
-        categorias, productos, usuarios, cajas, ventas,
+        categorias, productos, usuarios, cajas_config, cajas, ventas,
         movimientos, compras, consignaciones, reportes,
         resetDemo
     };

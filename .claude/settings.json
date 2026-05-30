@@ -16,7 +16,12 @@
       "Bash(node --check front/js/api.js)",
       "Bash(node --check front/Administrador/js/administrador.js)",
       "Bash(node --check front/Caja/js/caja.js)",
-      "Bash(GIT_EDITOR=true git rebase --continue)"
+      "Bash(GIT_EDITOR=true git rebase --continue)",
+      "Bash(node --check /home/david/Proyectos/VEF-APP/front/Administrador/js/administrador.js)",
+      "Bash(grep -v \"tipo_producto\\\\|es_consignacion\\\\|consignador\\\\|Consignación$\\\\|categoria_nombre\\\\|product-type\")",
+      "Bash(grep -n \"^// CAJA$\\\\|^// COMPRAS$\" /home/david/Proyectos/VEF-APP/front/Administrador/js/administrador.js)",
+      "Bash(node --check /home/david/Proyectos/VEF-APP/front/js/api.js)",
+      "Bash(node -e ' *)"
     ]
   }
 }

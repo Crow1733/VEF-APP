@@ -18,11 +18,8 @@
     <nav class="main-tabs" id="main-tabs">
         <button class="tab-button active" data-tab="productos">Productos</button>
         <button class="tab-button" data-tab="categorias">Categorías</button>
-        <button class="tab-button" data-tab="ventas">Ventas</button>
         <button class="tab-button" data-tab="caja">Caja</button>
-        <button class="tab-button" data-tab="compras">Compras</button>
-        <button class="tab-button" data-tab="consignacion">Consignación</button>
-        <button class="tab-button" data-tab="reportes">Reportes</button>
+        <button class="tab-button" data-tab="economia">Economía</button>
         <button class="tab-button" data-tab="usuarios">Usuarios</button>
     </nav>
 
@@ -199,155 +196,154 @@
             </div>
         </section>
 
-        <!-- VENTAS -->
-        <section class="tab-panel" id="tab-ventas">
-            <article class="panel-card">
-                <h2>Historial de ventas</h2>
-                <p class="muted">Cada venta incluye desglose entre efectivo y transferencia. Las marcadas <em>Consignación</em> no suman al total propio.</p>
-                <div class="filters-grid">
-                    <div class="quick-filters" id="quick-filters">
-                        <button class="btn filter active" data-filter="today">Hoy</button>
-                        <button class="btn filter" data-filter="week">Última semana</button>
-                        <button class="btn filter" data-filter="month">Último mes</button>
-                    </div>
-                    <div class="date-range">
-                        <label>
-                            Desde
-                            <input type="date" id="from-date">
-                        </label>
-                        <label>
-                            Hasta
-                            <input type="date" id="to-date">
-                        </label>
-                        <button class="btn" id="apply-custom-range">Aplicar rango</button>
-                    </div>
-                </div>
-
-                <div class="sub-tabs" id="sales-sub-tabs"></div>
-
-                <div class="sales-list" id="sales-list"></div>
-            </article>
-        </section>
-
         <!-- CAJA -->
         <section class="tab-panel" id="tab-caja">
-            <article class="panel-card" id="caja-actual-card">
-                <h2>Caja actual</h2>
-                <div id="caja-actual-content"></div>
-            </article>
-
             <article class="panel-card">
-                <h2>Histórico de cajas</h2>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Apertura</th>
-                                <th>Cierre</th>
-                                <th>Inicial</th>
-                                <th>Contado</th>
-                                <th>Diferencia</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cajas-table-body"></tbody>
-                    </table>
-                </div>
+                <h2>Cajas</h2>
+                <p class="muted">Hay 3 cajas fijas. Por cada una, marca las categorías de productos que esa caja podrá ver y vender.</p>
+                <div class="cajas-config-grid" id="cajas-config-grid"></div>
             </article>
         </section>
 
-        <!-- COMPRAS -->
-        <section class="tab-panel" id="tab-compras">
-            <article class="panel-card">
-                <h2>Compras de mercancía</h2>
-                <p class="muted">Las compras descuentan del fondo (no son gasto operativo) y reponen stock.</p>
-                <div class="actions-row">
-                    <button class="btn primary" id="btn-new-compra">Registrar nueva compra</button>
-                </div>
-                <div class="report-list" id="compras-list"></div>
-            </article>
-        </section>
+        <!-- ECONOMÍA (Ventas + Extracciones + Reportes) -->
+        <section class="tab-panel" id="tab-economia">
+            <nav class="sub-tabs" id="economia-sub-tabs">
+                <button class="sub-tab-button active" type="button" data-econ="ventas">Ventas</button>
+                <button class="sub-tab-button" type="button" data-econ="extracciones">Extracciones</button>
+                <button class="sub-tab-button" type="button" data-econ="reportes">Reportes</button>
+            </nav>
 
-        <!-- CONSIGNACIÓN -->
-        <section class="tab-panel" id="tab-consignacion">
-            <article class="panel-card">
-                <h2>Consignaciones</h2>
-                <p class="muted">Mercancía externa. Su venta se muestra aparte y no se suma al semanal propio.</p>
-                <div class="actions-row">
-                    <button class="btn primary" id="btn-new-consignacion">Nueva consignación</button>
-                </div>
-                <div class="report-list" id="consignaciones-list"></div>
-            </article>
-        </section>
+            <!-- VENTAS -->
+            <div class="econ-panel active" data-econ="ventas">
+                <article class="panel-card">
+                    <h2>Historial de ventas</h2>
+                    <p class="muted">Cada venta incluye desglose entre efectivo y transferencia. Las marcadas <em>Consignación</em> no suman al total propio.</p>
 
-        <!-- REPORTES -->
-        <section class="tab-panel" id="tab-reportes">
-            <article class="panel-card">
-                <h2>Filtro de período</h2>
-                <div class="filters-grid">
-                    <div class="quick-filters" id="report-quick-filters">
-                        <button class="btn filter active" data-filter="week">Última semana</button>
-                        <button class="btn filter" data-filter="month">Último mes</button>
-                        <button class="btn filter" data-filter="all">Todo</button>
+                    <fieldset class="cajas-filter" data-caja-filter="ventas">
+                        <legend>Cajas</legend>
+                        <button class="btn filter active" type="button" data-caja="all">Todas</button>
+                        <button class="btn filter" type="button" data-caja="1">Caja 1</button>
+                        <button class="btn filter" type="button" data-caja="2">Caja 2</button>
+                        <button class="btn filter" type="button" data-caja="3">Caja 3</button>
+                    </fieldset>
+
+                    <div class="filters-grid">
+                        <div class="quick-filters" id="quick-filters">
+                            <button class="btn filter active" type="button" data-filter="today">Hoy</button>
+                            <button class="btn filter" type="button" data-filter="week">Última semana</button>
+                            <button class="btn filter" type="button" data-filter="month">Último mes</button>
+                        </div>
+                        <div class="date-range">
+                            <label>
+                                Desde
+                                <input type="date" id="from-date">
+                            </label>
+                            <label>
+                                Hasta
+                                <input type="date" id="to-date">
+                            </label>
+                            <button class="btn" type="button" id="apply-custom-range">Aplicar rango</button>
+                        </div>
                     </div>
-                    <div class="date-range">
-                        <label>
-                            Desde
-                            <input type="date" id="report-from">
-                        </label>
-                        <label>
-                            Hasta
-                            <input type="date" id="report-to">
-                        </label>
-                        <button class="btn" id="apply-report-range">Aplicar</button>
+
+                    <div class="sales-list" id="sales-list"></div>
+                </article>
+            </div>
+
+            <!-- EXTRACCIONES -->
+            <div class="econ-panel" data-econ="extracciones" hidden>
+                <article class="panel-card">
+                    <h2>Extracciones de caja</h2>
+                    <p class="muted">Retiros directos registrados desde caja para seguimiento administrativo.</p>
+
+                    <fieldset class="cajas-filter" data-caja-filter="extracciones">
+                        <legend>Cajas</legend>
+                        <button class="btn filter active" type="button" data-caja="all">Todas</button>
+                        <button class="btn filter" type="button" data-caja="1">Caja 1</button>
+                        <button class="btn filter" type="button" data-caja="2">Caja 2</button>
+                        <button class="btn filter" type="button" data-caja="3">Caja 3</button>
+                    </fieldset>
+
+                    <div class="report-list" id="extracciones-list"></div>
+                </article>
+            </div>
+
+            <!-- REPORTES -->
+            <div class="econ-panel" data-econ="reportes" hidden>
+                <article class="panel-card">
+                    <h2>Filtro de período</h2>
+
+                    <fieldset class="cajas-filter" data-caja-filter="reportes">
+                        <legend>Cajas</legend>
+                        <button class="btn filter active" type="button" data-caja="all">Todas</button>
+                        <button class="btn filter" type="button" data-caja="1">Caja 1</button>
+                        <button class="btn filter" type="button" data-caja="2">Caja 2</button>
+                        <button class="btn filter" type="button" data-caja="3">Caja 3</button>
+                    </fieldset>
+
+                    <div class="filters-grid">
+                        <div class="quick-filters" id="report-quick-filters">
+                            <button class="btn filter active" type="button" data-filter="week">Última semana</button>
+                            <button class="btn filter" type="button" data-filter="month">Último mes</button>
+                            <button class="btn filter" type="button" data-filter="all">Todo</button>
+                        </div>
+                        <div class="date-range">
+                            <label>
+                                Desde
+                                <input type="date" id="report-from">
+                            </label>
+                            <label>
+                                Hasta
+                                <input type="date" id="report-to">
+                            </label>
+                            <button class="btn" type="button" id="apply-report-range">Aplicar</button>
+                        </div>
                     </div>
-                </div>
-            </article>
+                </article>
 
-            <article class="panel-card">
-                <h2>Reporte semanal</h2>
-                <p class="muted">Excluye consignación del total propio.</p>
-                <div id="report-semanal"></div>
-            </article>
+                <article class="panel-card">
+                    <h2>Reporte semanal</h2>
+                    <p class="muted">Excluye consignación del total propio.</p>
+                    <div id="report-semanal"></div>
+                </article>
 
-            <article class="panel-card">
-                <h2>Por categoría</h2>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Categoría</th>
-                                <th>Tipo</th>
-                                <th>Unidades</th>
-                                <th>Venta</th>
-                                <th>Utilidad</th>
-                            </tr>
-                        </thead>
-                        <tbody id="report-categorias-body"></tbody>
-                    </table>
-                </div>
-            </article>
+                <article class="panel-card">
+                    <h2>Por categoría</h2>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Tipo</th>
+                                    <th>Unidades</th>
+                                    <th>Venta</th>
+                                    <th>Utilidad</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-categorias-body"></tbody>
+                        </table>
+                    </div>
+                </article>
 
-            <article class="panel-card">
-                <h2>Utilidad por producto</h2>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Producto</th>
-                                <th>Categoría</th>
-                                <th>Tipo</th>
-                                <th>Unidades</th>
-                                <th>Venta</th>
-                                <th>Utilidad</th>
-                            </tr>
-                        </thead>
-                        <tbody id="report-productos-body"></tbody>
-                    </table>
-                </div>
-            </article>
+                <article class="panel-card">
+                    <h2>Utilidad por producto</h2>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th>Tipo</th>
+                                    <th>Unidades</th>
+                                    <th>Venta</th>
+                                    <th>Utilidad</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-productos-body"></tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
         </section>
 
         <!-- USUARIOS -->
@@ -439,41 +435,8 @@
         </div>
     </div>
 
-    <div class="modal" id="compra-modal" aria-hidden="true">
-        <div class="modal-backdrop" data-close-modal="compra-modal"></div>
-        <div class="modal-card">
-            <div class="modal-head">
-                <h3>Registrar compra de mercancía</h3>
-                <button class="btn" data-close-modal="compra-modal">Cerrar</button>
-            </div>
-            <div class="modal-content" id="compra-modal-content"></div>
-        </div>
-    </div>
-
-    <div class="modal" id="consignacion-modal" aria-hidden="true">
-        <div class="modal-backdrop" data-close-modal="consignacion-modal"></div>
-        <div class="modal-card">
-            <div class="modal-head">
-                <h3 id="consignacion-modal-title">Nueva consignación</h3>
-                <button class="btn" data-close-modal="consignacion-modal">Cerrar</button>
-            </div>
-            <div class="modal-content" id="consignacion-modal-content"></div>
-        </div>
-    </div>
-
-    <div class="modal" id="cierre-caja-modal" aria-hidden="true">
-        <div class="modal-backdrop" data-close-modal="cierre-caja-modal"></div>
-        <div class="modal-card">
-            <div class="modal-head">
-                <h3>Cerrar caja</h3>
-                <button class="btn" data-close-modal="cierre-caja-modal">Cerrar</button>
-            </div>
-            <div class="modal-content" id="cierre-caja-content"></div>
-        </div>
-    </div>
-
     <script src="../js/auth-guard.js" data-roles="admin" data-root="../" data-login="../login/login.html"></script>
-    <script src="../js/api.js"></script>
-    <script src="js/administrador.js"></script>
+    <script src="../js/api.js?v=4"></script>
+    <script src="js/administrador.js?v=4"></script>
 </body>
 </html>

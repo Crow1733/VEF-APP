@@ -1,8 +1,9 @@
 const state = {
     activeTab: 'productos',
+    activeEconomia: 'ventas',
     activeFilter: 'today',
     customRange: null,
-    activeCajaTab: null,
+    cajaFilter: { ventas: 'all', extracciones: 'all', reportes: 'all' },
     editingProductId: null,
     editingCategoryId: null,
     editingUserId: null,
@@ -35,8 +36,9 @@ let cache = {
     productos: [],
     ventas: [],
     cajas: [],
+    cajasConfig: [],
     compras: [],
-    consignaciones: [],
+    movimientos: [],
     usuarios: []
 };
 
@@ -67,14 +69,15 @@ function normalizeNumberInput(value) {
 }
 
 async function refreshCache() {
-    [cache.categorias, cache.productos, cache.ventas, cache.cajas, cache.compras, cache.consignaciones, cache.usuarios] =
+    [cache.categorias, cache.productos, cache.ventas, cache.cajas, cache.cajasConfig, cache.compras, cache.movimientos, cache.usuarios] =
         await Promise.all([
             window.api.categorias.listar(),
             window.api.productos.listar(),
             window.api.ventas.listar(),
             window.api.cajas.listar(),
+            window.api.cajas_config.listar(),
             window.api.compras.listar(),
-            window.api.consignaciones.listar(),
+            window.api.movimientos.listar(),
             window.api.usuarios.listar()
         ]);
 }
@@ -136,12 +139,57 @@ function renderActiveTab() {
     switch (state.activeTab) {
         case 'productos': renderProducts(); break;
         case 'categorias': renderCategories(); break;
-        case 'ventas': renderSales(); break;
         case 'caja': renderCajaTab(); break;
-        case 'compras': renderCompras(); break;
-        case 'consignacion': renderConsignaciones(); break;
-        case 'reportes': renderReportes(); break;
+        case 'economia': renderEconomia(); break;
         case 'usuarios': renderUsers(); break;
+    }
+}
+
+function setupEconomiaSubTabs() {
+    document.querySelectorAll('#economia-sub-tabs .sub-tab-button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            state.activeEconomia = btn.dataset.econ;
+            renderEconomia();
+        });
+    });
+}
+
+function setupCajaFilters() {
+    document.querySelectorAll('.cajas-filter').forEach((fs) => {
+        const scope = fs.dataset.cajaFilter;
+        fs.querySelectorAll('button[data-caja]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const value = btn.dataset.caja === 'all' ? 'all' : Number(btn.dataset.caja);
+                state.cajaFilter[scope] = value;
+                fs.querySelectorAll('button[data-caja]').forEach((b) => {
+                    b.classList.toggle('active', String(b.dataset.caja) === String(btn.dataset.caja));
+                });
+                if (scope === 'ventas') renderSales();
+                else if (scope === 'extracciones') renderExtracciones();
+                else if (scope === 'reportes') renderReportes();
+            });
+        });
+    });
+}
+
+function getCajaFilter(scope) {
+    const value = state.cajaFilter[scope];
+    return value === 'all' ? null : Number(value);
+}
+
+function renderEconomia() {
+    document.querySelectorAll('#economia-sub-tabs .sub-tab-button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.econ === state.activeEconomia);
+    });
+    document.querySelectorAll('#tab-economia .econ-panel').forEach((panel) => {
+        const active = panel.dataset.econ === state.activeEconomia;
+        panel.classList.toggle('active', active);
+        panel.hidden = !active;
+    });
+    switch (state.activeEconomia) {
+        case 'ventas': renderSales(); break;
+        case 'extracciones': renderExtracciones(); break;
+        case 'reportes': renderReportes(); break;
     }
 }
 
@@ -525,38 +573,12 @@ function getSalesDateRange() {
     return { from, to: now };
 }
 
-function renderSalesSubTabs() {
-    const container = document.getElementById('sales-sub-tabs');
-    if (!cache.cajas.length) {
-        container.innerHTML = '';
-        return;
-    }
-    if (!state.activeCajaTab) {
-        const abierta = cache.cajas.find((c) => c.estado === 'abierta');
-        state.activeCajaTab = abierta ? abierta.id : cache.cajas[0].id;
-    }
-    container.innerHTML = cache.cajas
-        .sort((a, b) => b.id - a.id)
-        .map((c) => `
-            <button class="sub-tab-button ${state.activeCajaTab === c.id ? 'active' : ''}" data-caja-id="${c.id}">
-                Caja #${c.id} ${c.estado === 'abierta' ? '· activa' : ''}
-            </button>
-        `).join('');
-    container.querySelectorAll('.sub-tab-button').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            state.activeCajaTab = Number(btn.dataset.cajaId);
-            renderSalesSubTabs();
-            renderSales();
-        });
-    });
-}
-
 function renderSales() {
-    renderSalesSubTabs();
     const list = document.getElementById('sales-list');
     const { from, to } = getSalesDateRange();
+    const cajaId = getCajaFilter('ventas');
     const filtered = cache.ventas
-        .filter((v) => v.caja_id === state.activeCajaTab)
+        .filter((v) => cajaId === null || v.caja_id === cajaId)
         .filter((v) => {
             const d = new Date(v.fecha);
             return d >= from && d <= to;
@@ -617,407 +639,97 @@ function showSaleDetails(id) {
 }
 
 // ============================================================================
-// CAJA
+// CAJA — 3 cajas fijas, asignación de categorías
 // ============================================================================
 function renderCajaTab() {
-    const caja = cache.cajas.find((c) => c.estado === 'abierta');
-    const content = document.getElementById('caja-actual-content');
-    if (caja) {
-        renderCajaActual(caja, content);
-    } else {
-        content.innerHTML = `
-            <p class="muted">No hay caja abierta en este momento.</p>
-            <p class="muted">Las cajas se abren desde el panel de Caja con el efectivo inicial.</p>
-        `;
-    }
-
-    const body = document.getElementById('cajas-table-body');
-    if (!cache.cajas.length) {
-        body.innerHTML = '<tr class="table-empty-row"><td colspan="8"><div class="empty-state">Aún no hay cajas registradas.</div></td></tr>';
+    const grid = document.getElementById('cajas-config-grid');
+    if (!grid) return;
+    if (!cache.cajasConfig.length) {
+        grid.innerHTML = '<div class="empty-state">No se pudieron cargar las cajas.</div>';
         return;
     }
-    body.innerHTML = cache.cajas
-        .sort((a, b) => b.id - a.id)
-        .map((c) => `
-            <tr>
-                <td data-label="ID">#${c.id}</td>
-                <td data-label="Apertura">${formatDateTime(c.fecha_apertura)}</td>
-                <td data-label="Cierre">${formatDateTime(c.fecha_cierre)}</td>
-                <td data-label="Inicial">${formatMoney(c.efectivo_inicial)}</td>
-                <td data-label="Contado">${c.efectivo_contado != null ? formatMoney(c.efectivo_contado) : '-'}</td>
-                <td data-label="Diferencia">${c.diferencia != null ? `<span class="${c.diferencia < 0 ? 'report-delta exit' : 'report-delta entry'}">${formatMoney(c.diferencia)}</span>` : '-'}</td>
-                <td data-label="Estado">${c.estado === 'abierta' ? '<span class="badge visible">Abierta</span>' : '<span class="badge hidden">Cerrada</span>'}</td>
-                <td data-label="Acciones">
-                    <div class="row-actions">
-                        <button class="btn" onclick="verCajaDesglose(${c.id})">Ver desglose</button>
-                        ${c.estado === 'abierta' ? `<button class="btn danger" onclick="abrirCierreCaja(${c.id})">Cerrar</button>` : ''}
-                    </div>
-                </td>
-            </tr>
+
+    const categoriasActivas = cache.categorias.filter((c) => c.activa);
+
+    grid.innerHTML = cache.cajasConfig.map((caja) => {
+        const seleccionadas = new Set(caja.categorias_ids || []);
+        const checks = categoriasActivas.map((cat) => `
+            <label class="${cat.es_consignacion ? 'cat-consignacion' : ''}">
+                <input type="checkbox" data-caja="${caja.id}" data-cat="${cat.id}" ${seleccionadas.has(cat.id) ? 'checked' : ''}>
+                ${cat.nombre}${cat.es_consignacion ? ' (consignación)' : ''}
+            </label>
         `).join('');
+
+        return `
+            <div class="caja-config-card" id="caja-config-${caja.id}">
+                <h3>${caja.nombre}</h3>
+                <div class="summary" id="caja-config-summary-${caja.id}">
+                    ${seleccionadas.size} categoría(s) asignada(s)
+                </div>
+                <div class="categoria-checks">
+                    ${checks}
+                </div>
+                <div class="actions-row">
+                    <button type="button" class="btn" onclick="toggleAllCajaCategorias(${caja.id}, true)">Marcar todas</button>
+                    <button type="button" class="btn" onclick="toggleAllCajaCategorias(${caja.id}, false)">Quitar todas</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    grid.querySelectorAll('input[type="checkbox"][data-caja]').forEach((el) => {
+        el.addEventListener('change', () => guardarCajaCategorias(Number(el.dataset.caja)));
+    });
 }
 
-async function renderCajaActual(caja, container) {
-    const d = await window.api.cajas.desgloseEfectivo(caja.id);
-    container.innerHTML = `
+async function guardarCajaCategorias(cajaId) {
+    const checks = document.querySelectorAll(`#caja-config-${cajaId} input[type="checkbox"][data-caja="${cajaId}"]`);
+    const ids = Array.from(checks).filter((c) => c.checked).map((c) => Number(c.dataset.cat));
+    await window.api.cajas_config.actualizarCategorias(cajaId, ids);
+    cache.cajasConfig = await window.api.cajas_config.listar();
+    const summary = document.getElementById(`caja-config-summary-${cajaId}`);
+    if (summary) summary.textContent = `${ids.length} categoría(s) asignada(s)`;
+}
+
+function toggleAllCajaCategorias(cajaId, marcar) {
+    document.querySelectorAll(`#caja-config-${cajaId} input[type="checkbox"][data-caja="${cajaId}"]`).forEach((c) => {
+        c.checked = marcar;
+    });
+    guardarCajaCategorias(cajaId);
+}
+
+// ============================================================================
+// EXTRACCIONES (retiros directos de caja)
+// ============================================================================
+function renderExtracciones() {
+    const list = document.getElementById('extracciones-list');
+    if (!list) return;
+    const cajaId = getCajaFilter('extracciones');
+    const items = cache.movimientos
+        .filter((m) => m.es_extraccion)
+        .filter((m) => cajaId === null || m.caja_id === cajaId)
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    if (!items.length) {
+        list.innerHTML = '<div class="empty-state">No hay extracciones para este filtro.</div>';
+        return;
+    }
+
+    list.innerHTML = items.map((m) => `
         <div class="report-card">
             <div class="report-head">
-                <strong>Caja #${caja.id} · ${formatDateTime(caja.fecha_apertura)}</strong>
-                <span class="badge visible">Abierta</span>
+                <div>
+                    <strong>Extracción #${m.id}</strong>
+                    <div class="muted">${formatDateTime(m.fecha)} · Caja #${m.caja_id || '—'}</div>
+                </div>
+                <span class="report-tag exit">−${formatMoney(m.monto)}</span>
             </div>
             <div class="report-meta">
-                <span>Efectivo inicial: <strong>${formatMoney(d.efectivo_inicial)}</strong></span>
-                <span>Ventas efectivo: <strong>${formatMoney(d.ventas_efectivo)}</strong></span>
-                <span>Ventas transferencia: <strong>${formatMoney(d.ventas_transferencia)}</strong></span>
-                <span>Extracciones: <strong>${formatMoney(d.extracciones)}</strong></span>
-                <span>Compras mercancía: <strong>${formatMoney(d.compras_mercancia)}</strong></span>
-                <span>Pagos varios: <strong>${formatMoney(d.pagos_varios)}</strong></span>
-                <span>Efectivo esperado: <strong>${formatMoney(d.efectivo_esperado)}</strong></span>
-            </div>
-            <div class="actions-row">
-                <button class="btn danger" onclick="abrirCierreCaja(${caja.id})">Cerrar caja</button>
+                <span>${m.concepto || 'Sin motivo'}</span>
+                ${m.responsable ? `<span>Responsable: ${m.responsable}</span>` : ''}
             </div>
         </div>
-    `;
-}
-
-async function verCajaDesglose(id) {
-    const caja = cache.cajas.find((c) => c.id === id);
-    const d = await window.api.cajas.desgloseEfectivo(id);
-    document.getElementById('modal-title').textContent = `Desglose caja #${id}`;
-    document.getElementById('modal-content').innerHTML = `
-        <div class="detail-item">
-            <div class="muted">Apertura: ${formatDateTime(caja.fecha_apertura)}</div>
-            <div class="muted">Cierre: ${formatDateTime(caja.fecha_cierre)}</div>
-        </div>
-        <div class="detail-item">
-            <div>Efectivo inicial: <strong>${formatMoney(d.efectivo_inicial)}</strong></div>
-            <div>+ Ventas en efectivo: <strong>${formatMoney(d.ventas_efectivo)}</strong></div>
-            <div>− Extracciones: <strong>${formatMoney(d.extracciones)}</strong></div>
-            <div>− Compras mercancía: <strong>${formatMoney(d.compras_mercancia)}</strong></div>
-            <div>− Pagos varios: <strong>${formatMoney(d.pagos_varios)}</strong></div>
-            <div>= Efectivo esperado: <strong>${formatMoney(d.efectivo_esperado)}</strong></div>
-        </div>
-        <div class="detail-item">
-            <div>Efectivo contado: <strong>${caja.efectivo_contado != null ? formatMoney(caja.efectivo_contado) : '-'}</strong></div>
-            <div>Diferencia: <strong>${caja.diferencia != null ? formatMoney(caja.diferencia) : '-'}</strong></div>
-        </div>
-        <div class="detail-item">
-            <div class="muted">Ventas por transferencia: <strong>${formatMoney(d.ventas_transferencia)}</strong></div>
-        </div>
-    `;
-    openModal('sale-details-modal');
-}
-
-async function abrirCierreCaja(id) {
-    const caja = cache.cajas.find((c) => c.id === id);
-    const d = await window.api.cajas.desgloseEfectivo(id);
-    document.getElementById('cierre-caja-content').innerHTML = `
-        <div class="detail-item">
-            <div>Caja #${caja.id}</div>
-            <div>Efectivo esperado: <strong>${formatMoney(d.efectivo_esperado)}</strong></div>
-        </div>
-        <label class="form-grid" style="display:grid; gap:8px;">
-            Efectivo contado
-            <input type="number" id="cierre-efectivo-contado" min="0" step="0.01" value="${d.efectivo_esperado}">
-        </label>
-        <label class="form-grid" style="display:grid; gap:8px;">
-            Observación
-            <input type="text" id="cierre-observacion" placeholder="Ej: diferencia por vuelto">
-        </label>
-        <div class="detail-actions">
-            <button class="btn" data-close-modal="cierre-caja-modal">Cancelar</button>
-            <button class="btn danger" id="confirm-cierre-caja">Cerrar caja</button>
-        </div>
-    `;
-    document.getElementById('cierre-caja-modal').querySelectorAll('[data-close-modal]').forEach((el) => {
-        el.addEventListener('click', () => closeModal(el.dataset.closeModal));
-    });
-    document.getElementById('confirm-cierre-caja').addEventListener('click', async () => {
-        const contado = Number(document.getElementById('cierre-efectivo-contado').value) || 0;
-        const obs = document.getElementById('cierre-observacion').value.trim();
-        await window.api.cajas.cerrar(id, contado, obs);
-        await refreshCache();
-        closeModal('cierre-caja-modal');
-        renderCajaTab();
-    });
-    openModal('cierre-caja-modal');
-}
-
-// ============================================================================
-// COMPRAS
-// ============================================================================
-function renderCompras() {
-    const list = document.getElementById('compras-list');
-    if (!cache.compras.length) {
-        list.innerHTML = '<div class="empty-state">Aún no se han registrado compras.</div>';
-        return;
-    }
-    list.innerHTML = cache.compras
-        .sort((a, b) => b.id - a.id)
-        .map((c) => `
-            <div class="report-card">
-                <div class="report-head">
-                    <div>
-                        <strong>Compra #${c.id}</strong>
-                        <div class="muted">${formatDateTime(c.fecha)}</div>
-                    </div>
-                    <span class="report-tag exit">${formatMoney(c.total)}</span>
-                </div>
-                <div class="report-meta">
-                    <span>Procedencia: ${c.procedencia || '-'}</span>
-                    <span>Método: ${c.metodo_pago}</span>
-                    <span>${c.descuenta_fondo ? 'Descuenta del fondo' : 'Sin descuento de fondo'}</span>
-                </div>
-                <div>
-                    ${c.items.map((i) => `<span class="muted">· ${i.producto_nombre} × ${i.cantidad} a ${formatMoney(i.costo_unitario)} = <strong>${formatMoney(i.subtotal)}</strong></span><br>`).join('')}
-                </div>
-                ${c.observacion ? `<div class="muted">${c.observacion}</div>` : ''}
-            </div>
-        `).join('');
-}
-
-function abrirModalCompra() {
-    const opciones = cache.productos
-        .filter((p) => p.tipo_producto !== 'consignacion')
-        .map((p) => `<option value="${p.id}">${p.nombre} (stock ${p.stock_actual})</option>`).join('');
-    document.getElementById('compra-modal-content').innerHTML = `
-        <div class="form-grid">
-            <label>
-                Procedencia (texto libre)
-                <input type="text" id="compra-procedencia" placeholder="Ej: Mayorista del centro">
-            </label>
-            <label>
-                Método de pago
-                <select id="compra-metodo">
-                    <option value="efectivo">Efectivo</option>
-                    <option value="transferencia">Transferencia</option>
-                </select>
-            </label>
-            <label class="inline-row">
-                <input type="checkbox" id="compra-descuenta" checked>
-                Descuenta del fondo de caja
-            </label>
-            <label>
-                Observación
-                <input type="text" id="compra-obs">
-            </label>
-        </div>
-        <h4 style="margin-bottom:6px;">Items de la compra</h4>
-        <div id="compra-items"></div>
-        <div class="actions-row">
-            <button class="btn" id="add-compra-item">+ Agregar item</button>
-        </div>
-        <div class="detail-actions">
-            <button class="btn" data-close-modal="compra-modal">Cancelar</button>
-            <button class="btn primary" id="confirm-compra">Guardar compra</button>
-        </div>
-    `;
-
-    function renderItems(items) {
-        document.getElementById('compra-items').innerHTML = items.map((_, idx) => `
-            <div class="detail-item">
-                <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">
-                    <label>Producto
-                        <select data-idx="${idx}" data-field="producto_id">${opciones}</select>
-                    </label>
-                    <label>Cantidad
-                        <input type="number" min="1" step="1" data-idx="${idx}" data-field="cantidad" value="1">
-                    </label>
-                    <label>Costo unitario
-                        <input type="number" min="0" step="0.01" data-idx="${idx}" data-field="costo_unitario" value="0">
-                    </label>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    let items = [{}];
-    renderItems(items);
-
-    document.getElementById('add-compra-item').addEventListener('click', () => {
-        items.push({});
-        renderItems(items);
-    });
-
-    document.getElementById('compra-modal').querySelectorAll('[data-close-modal]').forEach((el) => {
-        el.addEventListener('click', () => closeModal(el.dataset.closeModal));
-    });
-
-    document.getElementById('confirm-compra').addEventListener('click', async () => {
-        const itemsPayload = items.map((_, idx) => ({
-            producto_id: Number(document.querySelector(`[data-idx="${idx}"][data-field="producto_id"]`).value),
-            cantidad: Number(document.querySelector(`[data-idx="${idx}"][data-field="cantidad"]`).value),
-            costo_unitario: Number(document.querySelector(`[data-idx="${idx}"][data-field="costo_unitario"]`).value)
-        })).filter((i) => i.producto_id && i.cantidad > 0);
-        if (!itemsPayload.length) {
-            alert('Agrega al menos un item.');
-            return;
-        }
-        await window.api.compras.registrar({
-            procedencia: document.getElementById('compra-procedencia').value.trim(),
-            metodo_pago: document.getElementById('compra-metodo').value,
-            descuenta_fondo: document.getElementById('compra-descuenta').checked,
-            observacion: document.getElementById('compra-obs').value.trim(),
-            items: itemsPayload
-        });
-        await refreshCache();
-        closeModal('compra-modal');
-        renderCompras();
-    });
-
-    openModal('compra-modal');
-}
-
-// ============================================================================
-// CONSIGNACIONES
-// ============================================================================
-function renderConsignaciones() {
-    const list = document.getElementById('consignaciones-list');
-    if (!cache.consignaciones.length) {
-        list.innerHTML = '<div class="empty-state">Sin consignaciones registradas.</div>';
-        return;
-    }
-    list.innerHTML = cache.consignaciones
-        .sort((a, b) => b.id - a.id)
-        .map((c) => `
-            <div class="report-card">
-                <div class="report-head">
-                    <div>
-                        <strong>Consignación #${c.id} · ${c.consignador}</strong>
-                        <div class="muted">${c.categoria_nombre || '-'} · ${c.estado}</div>
-                    </div>
-                    <span class="report-tag entry">${formatMoney(c.total_vendido)}</span>
-                </div>
-                <div class="report-meta">
-                    <span>Inicio: ${formatDate(c.fecha_inicio)}</span>
-                    <span>Fin: ${c.fecha_fin ? formatDate(c.fecha_fin) : '-'}</span>
-                </div>
-                <div>
-                    ${c.items.length
-                        ? c.items.map((i) => `<span class="muted">· ${i.producto_nombre} · entregadas ${i.cantidad_entregada} · vendidas ${i.cantidad_vendida} · stock ${i.stock_actual} → ${formatMoney(i.subtotal_venta)}</span><br>`).join('')
-                        : '<span class="muted">Sin productos cargados.</span>'}
-                </div>
-                ${c.observacion ? `<div class="muted">${c.observacion}</div>` : ''}
-                <div class="row-actions">
-                    <button class="btn" onclick="agregarEntregaConsignacion(${c.id})">+ Entrega</button>
-                    ${c.estado === 'activa' ? `<button class="btn danger" onclick="cerrarConsignacion(${c.id})">Cerrar</button>` : ''}
-                </div>
-            </div>
-        `).join('');
-}
-
-function abrirModalConsignacion() {
-    const catOptions = cache.categorias.filter((c) => c.es_consignacion)
-        .map((c) => `<option value="${c.id}">${c.nombre}</option>`).join('');
-    document.getElementById('consignacion-modal-title').textContent = 'Nueva consignación';
-    document.getElementById('consignacion-modal-content').innerHTML = `
-        <div class="form-grid">
-            <label>
-                Consignador
-                <input type="text" id="cons-consignador" placeholder="Ej: Jesús">
-            </label>
-            <label>
-                Categoría (debe estar marcada como consignación)
-                <select id="cons-categoria">
-                    <option value="">(opcional)</option>
-                    ${catOptions}
-                </select>
-            </label>
-            <label>
-                Observación
-                <input type="text" id="cons-obs">
-            </label>
-        </div>
-        <div class="detail-actions">
-            <button class="btn" data-close-modal="consignacion-modal">Cancelar</button>
-            <button class="btn primary" id="confirm-cons">Crear consignación</button>
-        </div>
-    `;
-    document.getElementById('consignacion-modal').querySelectorAll('[data-close-modal]').forEach((el) => {
-        el.addEventListener('click', () => closeModal(el.dataset.closeModal));
-    });
-    document.getElementById('confirm-cons').addEventListener('click', async () => {
-        const consignador = document.getElementById('cons-consignador').value.trim();
-        if (!consignador) {
-            alert('Indica el nombre del consignador.');
-            return;
-        }
-        await window.api.consignaciones.crear({
-            consignador,
-            categoria_id: document.getElementById('cons-categoria').value || null,
-            observacion: document.getElementById('cons-obs').value.trim()
-        });
-        await refreshCache();
-        closeModal('consignacion-modal');
-        renderConsignaciones();
-    });
-    openModal('consignacion-modal');
-}
-
-function agregarEntregaConsignacion(consignacionId) {
-    const consignacion = cache.consignaciones.find((c) => c.id === consignacionId);
-    const productosCons = cache.productos.filter((p) => p.tipo_producto === 'consignacion');
-    if (!productosCons.length) {
-        alert('Crea primero un producto con tipo Consignación.');
-        return;
-    }
-    document.getElementById('consignacion-modal-title').textContent = `Agregar entrega · Consignación #${consignacionId}`;
-    document.getElementById('consignacion-modal-content').innerHTML = `
-        <p class="muted">Consignador: <strong>${consignacion.consignador}</strong></p>
-        <div class="form-grid">
-            <label>
-                Producto
-                <select id="entrega-producto">
-                    ${productosCons.map((p) => `<option value="${p.id}">${p.nombre}</option>`).join('')}
-                </select>
-            </label>
-            <label>
-                Cantidad entregada
-                <input type="number" id="entrega-cant" min="1" step="1" value="1">
-            </label>
-            <label>
-                Costo acordado
-                <input type="number" id="entrega-costo" min="0" step="0.01" value="0">
-            </label>
-            <label>
-                Precio de venta
-                <input type="number" id="entrega-precio" min="0" step="0.01" value="0">
-            </label>
-        </div>
-        <div class="detail-actions">
-            <button class="btn" data-close-modal="consignacion-modal">Cancelar</button>
-            <button class="btn primary" id="confirm-entrega">Registrar entrega</button>
-        </div>
-    `;
-    document.getElementById('consignacion-modal').querySelectorAll('[data-close-modal]').forEach((el) => {
-        el.addEventListener('click', () => closeModal(el.dataset.closeModal));
-    });
-    document.getElementById('confirm-entrega').addEventListener('click', async () => {
-        await window.api.consignaciones.agregarEntrega(consignacionId, {
-            producto_id: Number(document.getElementById('entrega-producto').value),
-            cantidad: Number(document.getElementById('entrega-cant').value),
-            costo_acordado: Number(document.getElementById('entrega-costo').value),
-            precio_venta: Number(document.getElementById('entrega-precio').value)
-        });
-        await refreshCache();
-        closeModal('consignacion-modal');
-        renderConsignaciones();
-    });
-    openModal('consignacion-modal');
-}
-
-function cerrarConsignacion(id) {
-    showConfirm({
-        title: `Cerrar consignación #${id}`,
-        text: 'La consignación quedará marcada como cerrada y no podrá recibir más entregas.',
-        okLabel: 'Sí, cerrar',
-        onConfirm: async () => {
-            await window.api.consignaciones.cerrar(id);
-            await refreshCache();
-            renderConsignaciones();
-        }
-    });
+    `).join('');
 }
 
 // ============================================================================
@@ -1057,10 +769,11 @@ function getReportRange() {
 
 async function renderReportes() {
     const { desde, hasta } = getReportRange();
+    const cajaId = getCajaFilter('reportes');
     const [semanal, porCategoria, porProducto] = await Promise.all([
-        window.api.reportes.semanal(desde, hasta),
-        window.api.reportes.porCategoria(desde, hasta),
-        window.api.reportes.utilidadPorProducto(desde, hasta)
+        window.api.reportes.semanal(desde, hasta, cajaId),
+        window.api.reportes.porCategoria(desde, hasta, cajaId),
+        window.api.reportes.utilidadPorProducto(desde, hasta, cajaId)
     ]);
 
     document.getElementById('report-semanal').innerHTML = `
@@ -1213,10 +926,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupCategoryForm();
     setupSalesFilters();
     setupReportFilters();
+    setupEconomiaSubTabs();
+    setupCajaFilters();
     setupUsersForm();
 
-    document.getElementById('btn-new-compra').addEventListener('click', abrirModalCompra);
-    document.getElementById('btn-new-consignacion').addEventListener('click', abrirModalConsignacion);
 
     document.getElementById('confirm-ok-btn').addEventListener('click', async () => {
         const fn = pendingConfirm;
@@ -1255,8 +968,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.editUser = editUser;
     window.deleteUser = deleteUser;
     window.showSaleDetails = showSaleDetails;
-    window.verCajaDesglose = verCajaDesglose;
-    window.abrirCierreCaja = abrirCierreCaja;
-    window.agregarEntregaConsignacion = agregarEntregaConsignacion;
-    window.cerrarConsignacion = cerrarConsignacion;
+    window.toggleAllCajaCategorias = toggleAllCajaCategorias;
 });
