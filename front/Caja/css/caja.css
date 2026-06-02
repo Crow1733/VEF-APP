@@ -69,6 +69,8 @@ html.modal-open {
 .page {
     min-height: 100vh;
     padding: 18px;
+    max-width: 1320px;
+    margin: 0 auto;
 }
 
 .header {

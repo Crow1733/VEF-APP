@@ -2,6 +2,21 @@
     grid-template-columns: 1fr;
 }
 
+#caja-state-body,
+#historico-cajas,
+#compras-list {
+    padding: 16px;
+}
+
+.cierre-form {
+    padding: 16px;
+}
+
+.list {
+    display: grid;
+    gap: 12px;
+}
+
 .desglose-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
