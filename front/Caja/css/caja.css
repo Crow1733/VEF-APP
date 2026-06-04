@@ -982,6 +982,18 @@ input[type="number"] {
         width: 100%;
     }
 
+    .products-panel .panel-header {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+    }
+
+    .order-panel {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+    }
+
     .product-card-top {
         grid-template-columns: 64px 1fr;
     }
@@ -1082,7 +1094,8 @@ input[type="number"] {
     .qty-control button,
     .btn-primary,
     .btn-ghost,
-    .btn-outline {
+    .btn-outline,
+    .btn-danger {
         width: 100%;
     }
 
