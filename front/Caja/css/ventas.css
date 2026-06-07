@@ -561,6 +561,13 @@ input[type="number"] {
     .sale-card .btn-outline,
     .modal-head .btn-outline {
         width: 100%;
+        min-height: 44px;
+    }
+
+    .op-tab {
+        flex: 1 1 auto;
+        min-height: 44px;
+        text-align: center;
     }
 
     .modal {

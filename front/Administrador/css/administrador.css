@@ -779,6 +779,7 @@ tbody tr {
     .main-tabs .tab-button {
         flex: 1 1 calc(50% - 6px);
         min-width: 0;
+        min-height: 44px;
         white-space: normal;
         text-align: center;
         justify-content: center;
@@ -806,13 +807,23 @@ tbody tr {
         gap: 8px;
     }
 
-    .quick-filters,
     .sub-tabs,
     .actions-row,
     .row-actions,
     .date-range {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .quick-filters {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .quick-filters .btn {
+        flex: 1 1 auto;
+        min-height: 44px;
     }
 
     .sub-tabs {
@@ -828,8 +839,6 @@ tbody tr {
         justify-content: center;
     }
 
-    .quick-filters .btn,
-    .sub-tabs .sub-tab-button,
     .actions-row .btn,
     .row-actions .btn,
     .date-range .btn {

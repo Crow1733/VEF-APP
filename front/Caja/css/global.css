@@ -163,7 +163,14 @@ input[type="number"] {
         flex: 1;
         min-width: 0;
         text-align: center;
-        padding: 10px 12px;
+        padding: 10px 8px;
+        font-size: 13px;
+        white-space: normal;
+        overflow-wrap: break-word;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .view-shell {

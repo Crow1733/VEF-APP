@@ -1082,8 +1082,18 @@ input[type="number"] {
     }
 
     .products-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 10px;
+        padding: 12px;
+    }
+
+    .product-card h3 {
+        font-size: 15px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
     }
 
     .qty-control {
@@ -1091,12 +1101,16 @@ input[type="number"] {
         gap: 6px;
     }
 
-    .qty-control button,
     .btn-primary,
     .btn-ghost,
     .btn-outline,
     .btn-danger {
         width: 100%;
+        min-height: 44px;
+    }
+
+    .qty-control button {
+        min-height: 44px;
     }
 
     .modal {

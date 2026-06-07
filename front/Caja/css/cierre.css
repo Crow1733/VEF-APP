@@ -19,7 +19,7 @@
 
 .desglose-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 12px;
     margin: 12px 0;
 }
@@ -116,7 +116,18 @@
 @media (max-width: 760px) {
     .cierre-form .btn-primary,
     .cierre-form .btn-danger,
-    .cierre-form .btn-outline {
+    .cierre-form .btn-outline,
+    .cierre-form .btn-ghost {
         width: 100%;
+        min-height: 44px;
+    }
+
+    .desglose-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+    }
+
+    .desglose-card .value {
+        font-size: 18px;
     }
 }
