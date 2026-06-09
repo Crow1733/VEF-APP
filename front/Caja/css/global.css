@@ -83,6 +83,50 @@ body {
     margin-left: auto;
 }
 
+/* ── Indicador de sincronización ── */
+.sync-badge {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    transition: background var(--duration-base), color var(--duration-base);
+    cursor: default;
+    user-select: none;
+    align-self: center;
+}
+
+.sync-badge.status-synced {
+    background: rgba(47, 158, 68, 0.14);
+    color: #2f9e44;
+    border-color: rgba(47, 158, 68, 0.25);
+}
+
+.sync-badge.status-offline {
+    background: rgba(214, 69, 69, 0.14);
+    color: #d64545;
+    border-color: rgba(214, 69, 69, 0.25);
+}
+
+.sync-badge.status-syncing {
+    background: rgba(244, 180, 0, 0.18);
+    color: var(--primary-strong, #d48a00);
+    border-color: rgba(244, 180, 0, 0.3);
+    animation: pulse-badge 1s ease-in-out infinite;
+}
+
+.sync-badge.status-partial {
+    background: rgba(244, 180, 0, 0.18);
+    color: var(--primary-strong, #d48a00);
+    border-color: rgba(244, 180, 0, 0.3);
+}
+
+@keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.55; }
+}
+
 .nav-tab {
     border: 1px solid var(--border);
     background: var(--surface-strong);

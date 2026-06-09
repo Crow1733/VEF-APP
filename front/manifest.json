@@ -1,0 +1,33 @@
+{
+    "name": "VEF — Sistema de Caja",
+    "short_name": "VEF",
+    "description": "Sistema de punto de venta y administración VEF",
+    "start_url": "/login/login.html",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#fff9e6",
+    "theme_color": "#f4b400",
+    "lang": "es",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }
+    ],
+    "categories": ["business", "productivity"]
+}
