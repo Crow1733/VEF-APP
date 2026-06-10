@@ -210,6 +210,76 @@ input[type="number"] {
     font-size: 13px;
 }
 
+.install-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(244,180,0,0.12), rgba(31,111,120,0.08));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-top: 4px;
+}
+
+.install-banner.hidden {
+    display: none;
+}
+
+.install-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.install-banner-text strong {
+    font-size: 14px;
+    color: var(--text);
+}
+
+.install-banner-text span {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.btn-install {
+    border: 0;
+    border-radius: var(--radius-sm);
+    padding: 10px 18px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 13px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+    color: #ffffff;
+    cursor: pointer;
+    white-space: nowrap;
+    min-height: 42px;
+    transition: transform 140ms, box-shadow 220ms;
+}
+
+.btn-install:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(244,180,0,0.35);
+}
+
+.btn-install-dismiss {
+    border: 0;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 6px;
+    line-height: 1;
+    border-radius: 6px;
+    transition: color 140ms;
+    flex-shrink: 0;
+}
+
+.btn-install-dismiss:hover {
+    color: var(--text);
+}
+
 @keyframes riseIn {
     from {
         opacity: 0;
@@ -223,20 +293,68 @@ input[type="number"] {
 
 @media (max-width: 840px) {
     body {
-        padding: 16px;
+        padding: 20px 16px;
+        align-items: flex-start;
     }
 
     .page {
         grid-template-columns: 1fr;
+        gap: 16px;
     }
 
     .hero {
-        padding: 18px;
+        padding: 22px 20px;
         border-radius: var(--radius-md);
+        gap: 10px;
+    }
+
+    .hero h1 {
+        font-size: 28px;
     }
 
     .card {
+        padding: 22px 20px;
         border-radius: var(--radius-md);
+        gap: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 16px 14px;
+    }
+
+    .hero {
+        padding: 18px 16px;
+    }
+
+    .hero h1 {
+        font-size: 22px;
+        letter-spacing: -0.3px;
+    }
+
+    .hero p {
+        font-size: 13px;
+    }
+
+    .card {
+        padding: 20px 16px;
+        gap: 14px;
+    }
+
+    .card-head h2 {
+        font-size: 20px;
+    }
+
+    input {
+        font-size: 16px;
+        padding: 14px;
+    }
+
+    .btn {
+        padding: 15px 16px;
+        min-height: 50px;
+        font-size: 16px;
     }
 }
 

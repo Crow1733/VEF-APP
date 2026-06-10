@@ -191,46 +191,104 @@ input[type="number"] {
     display: none !important;
 }
 
-@media (max-width: 720px) {
+/* ═══════════════════════════════════════════════════════
+   TABLET — 1024px y menor
+═══════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
     .topbar {
-        padding: 10px;
+        padding: 12px 14px;
         gap: 8px;
     }
 
-    .topbar .logout {
-        margin-left: 0;
-        width: 100%;
-        order: 99;
+    .nav-tab {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   MÓVIL — 720px y menor
+   Layout de 2 filas:
+     Fila 1: [⬤ sync badge] ─── [Cerrar sesión]
+     Fila 2: [Tab] [Tab] [Tab] [Tab]
+═══════════════════════════════════════════════════════ */
+@media (max-width: 720px) {
+    .topbar {
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        gap: 6px;
+        align-items: stretch;
     }
 
-    .nav-tab {
-        flex: 1;
-        min-width: 0;
-        text-align: center;
-        padding: 10px 8px;
+    /* Fila 1 izquierda: badge de sync */
+    .sync-badge {
+        order: -2;
+        flex: 1 1 auto;
+        align-self: center;
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+
+    /* Fila 1 derecha: botón de cierre de sesión */
+    .nav-tab.logout {
+        order: -1;
+        flex: 0 0 auto;
+        width: auto;
+        margin-left: 0;
         font-size: 13px;
+        padding: 10px 14px;
+        min-height: 40px;
+        border-radius: 12px;
+    }
+
+    /* Separador invisible que fuerza salto de línea entre fila 1 y fila 2 */
+    .topbar::after {
+        content: '';
+        flex-basis: 100%;
+        height: 0;
+        order: 0;
+    }
+
+    /* Fila 2: los 4 tabs de navegación en igual ancho */
+    .nav-tab:not(.logout) {
+        order: 1;
+        flex: 1 1 0;
+        min-height: 46px;
+        font-size: 12px;
+        padding: 8px 6px;
         white-space: normal;
         overflow-wrap: break-word;
-        min-height: 44px;
+        line-height: 1.3;
+        text-align: center;
+        border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
     }
 
     .view-shell {
-        min-height: calc(100dvh - 58px);
+        min-height: calc(100dvh - 114px);
     }
 }
 
-@media (max-width: 1024px) {
+/* ═══════════════════════════════════════════════════════
+   MUY PEQUEÑO — 480px y menor
+═══════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
     .topbar {
-        padding: 10px 12px;
-        gap: 8px;
+        padding: 8px 10px;
+        gap: 5px;
     }
 
-    .nav-tab {
-        padding: 10px 12px;
-        font-size: 14px;
+    .nav-tab:not(.logout) {
+        font-size: 11px;
+        padding: 8px 4px;
+        min-height: 42px;
+    }
+
+    .nav-tab.logout {
+        font-size: 12px;
+        padding: 8px 10px;
     }
 }
 

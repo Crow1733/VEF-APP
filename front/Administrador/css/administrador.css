@@ -760,18 +760,34 @@ tbody tr {
     }
 }
 
+/* ═══════════════════════════════════════════════════════
+   MÓVIL — 760px y menor
+═══════════════════════════════════════════════════════ */
 @media (max-width: 760px) {
+    /* ── Header principal ── */
     .top-header {
-        padding: 12px 14px;
+        padding: 14px 16px;
+        gap: 10px;
     }
 
     .top-header h1 {
-        font-size: 22px;
+        font-size: 20px;
+        letter-spacing: -0.3px;
     }
 
+    .header-actions {
+        gap: 8px;
+    }
+
+    .header-actions .btn {
+        padding: 9px 12px;
+        font-size: 13px;
+    }
+
+    /* ── Tabs de navegación ── */
     .main-tabs {
-        padding: 10px;
-        gap: 6px;
+        padding: 12px 14px;
+        gap: 8px;
         flex-wrap: wrap;
         overflow-x: visible;
     }
@@ -779,76 +795,143 @@ tbody tr {
     .main-tabs .tab-button {
         flex: 1 1 calc(50% - 6px);
         min-width: 0;
-        min-height: 44px;
+        min-height: 48px;
         white-space: normal;
         text-align: center;
-        justify-content: center;
+        font-size: 13px;
+        padding: 10px 8px;
     }
 
+    /* ── Contenido principal ── */
     .main-content {
-        padding: 10px;
+        padding: 16px 14px;
     }
 
+    .panel-grid {
+        gap: 16px;
+    }
+
+    /* ── Tarjetas ── */
     .panel-card {
-        padding: 12px;
-        border-radius: 14px;
+        padding: 18px 16px;
+        border-radius: 16px;
+    }
+
+    .panel-card h2 {
+        font-size: 18px;
+        margin-bottom: 14px;
     }
 
     .card-head-row {
         flex-direction: column;
         align-items: stretch;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .card-head-row h2 {
+        margin-bottom: 0;
     }
 
     .card-head-row .btn {
         width: 100%;
+        min-height: 44px;
     }
 
-    .filters-grid {
-        gap: 8px;
+    /* ── Formularios ── */
+    .form-grid {
+        gap: 12px;
     }
 
-    .sub-tabs,
-    .actions-row,
-    .row-actions,
-    .date-range {
+    .form-grid label {
+        font-size: 13px;
+    }
+
+    input,
+    select {
+        font-size: 16px;
+        padding: 13px 12px;
+    }
+
+    .actions-row {
         flex-direction: column;
         align-items: stretch;
+        margin-top: 12px;
+        gap: 10px;
+    }
+
+    .actions-row .btn {
+        width: 100%;
+        min-height: 48px;
+        font-size: 15px;
+    }
+
+    /* ── Filtros ── */
+    .filters-grid {
+        gap: 12px;
+        margin-bottom: 16px;
     }
 
     .quick-filters {
         flex-direction: row;
         flex-wrap: wrap;
-        gap: 6px;
+        gap: 8px;
     }
 
     .quick-filters .btn {
         flex: 1 1 auto;
         min-height: 44px;
+        padding: 9px 12px;
+        font-size: 13px;
     }
 
-    .sub-tabs {
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-
-    .sub-tabs .sub-tab-button {
-        flex: 1 1 calc(33.333% - 6px);
-        min-width: 0;
-        white-space: normal;
-        text-align: center;
-        justify-content: center;
-    }
-
-    .actions-row .btn,
-    .row-actions .btn,
-    .date-range .btn {
-        width: 100%;
+    .date-range {
+        flex-direction: column;
+        gap: 10px;
     }
 
     .date-range label {
         min-width: 0;
     }
 
+    .date-range .btn {
+        width: 100%;
+        min-height: 48px;
+    }
+
+    /* ── Sub-tabs (Economía) ── */
+    .sub-tabs {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .sub-tabs .sub-tab-button {
+        flex: 1 1 calc(33.333% - 6px);
+        min-width: 0;
+        min-height: 44px;
+        white-space: normal;
+        text-align: center;
+        font-size: 13px;
+        padding: 9px 8px;
+    }
+
+    /* ── Acciones en filas ── */
+    .row-actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+    }
+
+    .row-actions .btn {
+        flex: 1 1 auto;
+        min-height: 40px;
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    /* ── Tabla → tarjetas ── */
     .table-wrap {
         overflow: visible;
         border: none;
@@ -868,7 +951,7 @@ tbody tr {
     table {
         min-width: 0;
         border-collapse: separate;
-        border-spacing: 0 10px;
+        border-spacing: 0 12px;
     }
 
     thead {
@@ -877,10 +960,11 @@ tbody tr {
 
     tbody tr {
         border: 1px solid var(--border);
-        border-radius: 14px;
+        border-radius: 16px;
         background: var(--surface);
         overflow: hidden;
-        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+        margin-bottom: 4px;
     }
 
     tbody tr:hover {
@@ -890,98 +974,167 @@ tbody tr {
     tbody tr.table-empty-row {
         border: none;
         box-shadow: none;
+        margin: 0;
     }
 
     th,
     td {
         border: none;
-        padding: 6px 10px;
-        font-size: 12px;
+        padding: 0;
     }
 
     td {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         gap: 8px;
-        align-items: flex-start;
+        padding: 10px 14px;
+        font-size: 13px;
         text-align: right;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid rgba(240, 217, 166, 0.5);
     }
 
     td::before {
         content: attr(data-label);
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.4px;
+        letter-spacing: 0.5px;
         color: var(--muted);
         text-align: left;
-        flex: 0 0 45%;
-    }
-
-    td[data-label="Acciones"] {
-        display: block;
-        text-align: left;
-    }
-
-    td[data-label="Acciones"]::before {
-        display: block;
-        margin-bottom: 6px;
-    }
-
-    td[data-label="Acciones"] .row-actions {
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-
-    td[data-label="Acciones"] .row-actions .btn {
-        flex: 1 1 calc(33.333% - 4px);
-        width: auto;
-        padding: 6px 8px;
-        font-size: 12px;
+        flex: 0 0 40%;
+        white-space: nowrap;
     }
 
     td:last-child {
         border-bottom: none;
     }
 
+    /* Celda de acciones: botones en fila */
+    td[data-label="Acciones"] {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 14px;
+        text-align: left;
+    }
+
+    td[data-label="Acciones"]::before {
+        flex: none;
+        width: 100%;
+        margin-bottom: 4px;
+    }
+
+    td[data-label="Acciones"] .row-actions {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    td[data-label="Acciones"] .row-actions .btn {
+        flex: 1 1 auto;
+        min-height: 40px;
+        padding: 8px 10px;
+        font-size: 12px;
+        width: auto;
+    }
+
+    /* Tabla productos: layout limpio de 1 columna */
     #products-table-body tr {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        column-gap: 4px;
-        padding: 4px;
+        display: block;
+        padding: 0;
     }
 
     #products-table-body td {
-        border-bottom: 1px solid var(--border);
-        padding: 5px 8px;
+        padding: 9px 14px;
     }
 
-    #products-table-body td[data-label="Nombre"],
+    #products-table-body td[data-label="Foto"] {
+        justify-content: flex-start;
+        gap: 12px;
+    }
+
+    #products-table-body td[data-label="Nombre"] {
+        font-size: 14px;
+        font-weight: 600;
+    }
+
     #products-table-body td[data-label="Acciones"] {
-        grid-column: 1 / -1;
+        background: var(--surface-strong);
+        padding: 10px 14px;
     }
 
+    /* ── Sale cards ── */
     .sale-card-top {
         flex-direction: column;
         align-items: flex-start;
+        gap: 6px;
     }
 
+    .sale-card {
+        padding: 14px;
+        gap: 10px;
+    }
+
+    /* ── Modales ── */
     .modal-card {
-        width: calc(100vw - 16px);
-        margin: 8px;
-        border-radius: 12px;
-    }
-
-    .modal-head,
-    .modal-content {
-        padding: 10px;
+        width: calc(100vw - 24px);
+        margin: 12px;
+        border-radius: 16px;
     }
 
     .modal-head {
-        flex-direction: column;
-        align-items: flex-start;
+        padding: 16px;
+        gap: 10px;
+    }
+
+    .modal-content {
+        padding: 16px;
+    }
+
+    .modal-head h3 {
+        font-size: 17px;
+    }
+
+    .confirm-box {
+        padding: 20px 16px;
+        gap: 14px;
+    }
+
+    /* ── Config cajas ── */
+    .cajas-config-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   MUY PEQUEÑO — 480px y menor
+═══════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+    .top-header h1 {
+        font-size: 18px;
+    }
+
+    .main-content {
+        padding: 12px;
+    }
+
+    .panel-card {
+        padding: 14px 12px;
+    }
+
+    .main-tabs {
+        padding: 10px 12px;
+    }
+
+    .main-tabs .tab-button {
+        font-size: 12px;
+        padding: 9px 6px;
     }
 }
 

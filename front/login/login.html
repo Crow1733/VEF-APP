@@ -44,10 +44,49 @@
                 <button class="btn" type="submit">Entrar</button>
                 <div class="error" id="login-error" role="alert"></div>
             </form>
+
+            <div id="install-banner" class="install-banner hidden">
+                <div class="install-banner-text">
+                    <strong>Instalar app</strong>
+                    <span>Acceso rápido desde tu pantalla de inicio</span>
+                </div>
+                <button type="button" id="install-btn" class="btn-install">Instalar</button>
+                <button type="button" id="install-dismiss" class="btn-install-dismiss" aria-label="Cerrar">✕</button>
+            </div>
         </main>
     </div>
 
     <script src="../js/api.js?v=4"></script>
     <script src="login.js"></script>
+    <script>
+        (function () {
+            let _prompt = null;
+            const banner = document.getElementById('install-banner');
+            const btnInstall = document.getElementById('install-btn');
+            const btnDismiss = document.getElementById('install-dismiss');
+
+            window.addEventListener('beforeinstallprompt', function (e) {
+                e.preventDefault();
+                _prompt = e;
+                banner.classList.remove('hidden');
+            });
+
+            btnInstall.addEventListener('click', async function () {
+                if (!_prompt) return;
+                _prompt.prompt();
+                const { outcome } = await _prompt.userChoice;
+                _prompt = null;
+                banner.classList.add('hidden');
+            });
+
+            btnDismiss.addEventListener('click', function () {
+                banner.classList.add('hidden');
+            });
+
+            window.addEventListener('appinstalled', function () {
+                banner.classList.add('hidden');
+            });
+        })();
+    </script>
 </body>
 </html>

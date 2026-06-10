@@ -64,19 +64,27 @@
 .cierre-form input,
 .cierre-form textarea {
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px;
+    border-radius: 12px;
+    padding: 12px 14px;
     font: inherit;
     background: var(--surface);
+    transition: border-color 220ms, box-shadow 220ms;
+}
+
+.cierre-form input:focus,
+.cierre-form textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: var(--ring);
 }
 
 .history-card {
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px;
+    border-radius: 16px;
+    padding: 16px;
     background: var(--surface);
     display: grid;
-    gap: 6px;
+    gap: 8px;
 }
 
 .history-card .meta {
@@ -106,24 +114,91 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 14px;
+    padding: 12px 16px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     font-weight: 700;
+    font-size: 15px;
 }
 
+/* ═══════════════════════════════════════════════════════
+   MÓVIL — 760px y menor
+═══════════════════════════════════════════════════════ */
 @media (max-width: 760px) {
+    #caja-state-body,
+    #historico-cajas,
+    #compras-list {
+        padding: 14px;
+    }
+
+    .cierre-form {
+        padding: 14px;
+        gap: 14px;
+    }
+
+    .cierre-form input,
+    .cierre-form textarea {
+        font-size: 16px;
+        padding: 13px 14px;
+    }
+
     .cierre-form .btn-primary,
     .cierre-form .btn-danger,
     .cierre-form .btn-outline,
     .cierre-form .btn-ghost {
         width: 100%;
-        min-height: 44px;
+        min-height: 50px;
+        font-size: 16px;
     }
 
     .desglose-grid {
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 10px;
+        margin: 14px 0;
+    }
+
+    .desglose-card {
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .desglose-card .value {
+        font-size: 20px;
+    }
+
+    .history-card {
+        padding: 16px;
+        border-radius: 16px;
+        gap: 10px;
+    }
+
+    .total-box {
+        padding: 14px 16px;
+        font-size: 16px;
+    }
+
+    .list {
+        gap: 14px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   MUY PEQUEÑO — 480px y menor
+═══════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+    #caja-state-body,
+    #historico-cajas,
+    #compras-list {
+        padding: 12px;
+    }
+
+    .cierre-form {
+        padding: 12px;
+    }
+
+    .desglose-grid {
+        grid-template-columns: repeat(2, 1fr);
         gap: 8px;
     }
 
