@@ -1,0 +1,123 @@
+import json
+from typing import Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from database import get_conn
+from routers.reportes import compute_cuadre
+
+router = APIRouter(prefix="/api/cierres", tags=["cierres"])
+
+
+class CierrePayload(BaseModel):
+    desde: str
+    hasta: str
+    socios: int = 2
+    reserva_pct: float = 20.0
+    perdida_ganancia: float = 0.0
+    observacion: str = ""
+
+
+@router.get("")
+def listar():
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT id, fecha_inicio, fecha_fin, venta_total, utilidad_total,
+                      utilidad_neta, dividendos, por_socio, socios, reserva_pct,
+                      cerrada_en, observacion
+               FROM cierres_semanales ORDER BY fecha_fin DESC, id DESC"""
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/resumen")
+def resumen():
+    """Comparación multi-semana (Hoja1): una fila por semana cerrada + la unión
+    (totales). Lee cada métrica del snapshot del cuadre."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM cierres_semanales ORDER BY fecha_inicio").fetchall()
+
+    keys = ["venta_total", "venta_costo", "utilidad_bruta", "perdida_ganancia",
+            "gastos_operativos", "onat_arrend", "contador", "estimulacion",
+            "utilidad_neta", "reserva", "dividendos", "por_socio"]
+    semanas = []
+    total = {k: 0.0 for k in keys}
+    for r in rows:
+        d = dict(r)
+        snap = {}
+        if d.get("snapshot"):
+            try:
+                snap = json.loads(d["snapshot"])
+            except (TypeError, ValueError):
+                snap = {}
+        g = snap.get("gastos", {}) or {}
+        s = {
+            "id": d["id"],
+            "fecha_inicio": d["fecha_inicio"],
+            "fecha_fin": d["fecha_fin"],
+            "venta_total": snap.get("venta_total", d.get("venta_total") or 0),
+            "venta_costo": snap.get("venta_costo", d.get("venta_costo") or 0),
+            "utilidad_bruta": snap.get("utilidad_bruta", d.get("utilidad_total") or 0),
+            "perdida_ganancia": snap.get("perdida_ganancia", 0),
+            "gastos_operativos": g.get("operativos", 0),
+            "onat_arrend": g.get("onat", 0) + g.get("arrendamiento", 0),
+            "contador": g.get("contador", 0),
+            "estimulacion": g.get("estimulacion", 0),
+            "utilidad_neta": snap.get("utilidad_neta", d.get("utilidad_neta") or 0),
+            "reserva": snap.get("reserva", 0),
+            "dividendos": snap.get("dividendos", d.get("dividendos") or 0),
+            "por_socio": snap.get("por_socio", d.get("por_socio") or 0),
+            "socios": snap.get("socios", d.get("socios") or 0),
+        }
+        semanas.append(s)
+        for k in keys:
+            total[k] += s.get(k, 0) or 0
+    return {"semanas": semanas, "total": total}
+
+
+@router.get("/{id}")
+def obtener(id: int):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM cierres_semanales WHERE id=?", (id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Cierre no encontrado")
+    d = dict(row)
+    if d.get("snapshot"):
+        try:
+            d["cuadre"] = json.loads(d["snapshot"])
+        except (TypeError, ValueError):
+            d["cuadre"] = None
+    return d
+
+
+@router.post("")
+def cerrar(payload: CierrePayload):
+    """Congela el cuadre del rango en cierres_semanales (snapshot)."""
+    c = compute_cuadre(payload.desde, payload.hasta, payload.socios,
+                       payload.reserva_pct, payload.perdida_ganancia)
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO cierres_semanales
+               (fecha_inicio, fecha_fin, venta_total, transferencia_total, efectivo_total,
+                extracciones_total, compras_total, consignacion_total, utilidad_total,
+                venta_costo, utilidad_neta, dividendos, por_socio, socios, reserva_pct,
+                deudas_pagadas, faltante_sobrante, observacion,
+                cerrada_en, snapshot)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),?)""",
+            (payload.desde, payload.hasta, c["venta_total"], c["transferencia"], c["efectivo"],
+             c["movimientos"]["extracciones"], c["movimientos"]["compras_mercancia"],
+             c["consignadores_a_pagar"], c["utilidad_bruta"],
+             c["venta_costo"], c["utilidad_neta"], c["dividendos"], c["por_socio"],
+             c["socios"], c["reserva_pct"], c["movimientos"]["deudas_pagadas"],
+             c["faltante_sobrante"], payload.observacion, json.dumps(c)),
+        )
+        row = conn.execute("SELECT * FROM cierres_semanales WHERE id=?", (cur.lastrowid,)).fetchone()
+    d = dict(row)
+    d["cuadre"] = c
+    return d
+
+
+@router.delete("/{id}")
+def eliminar(id: int):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM cierres_semanales WHERE id=?", (id,))
+    return {"ok": True}

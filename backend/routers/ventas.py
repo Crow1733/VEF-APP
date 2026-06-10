@@ -18,6 +18,8 @@ class VentaPayload(BaseModel):
     subtotal_transferencia: float = 0
     observacion: str = ""
     caja_id: Optional[int] = None
+    cajero_id: Optional[int] = None
+    cajero_nombre: Optional[str] = None
 
 
 class FiltrosVenta(BaseModel):
@@ -97,10 +99,12 @@ def registrar(payload: VentaPayload):
         es_consignacion_venta = 0
         cur = conn.execute(
             """INSERT INTO ventas (caja_id, tipo_pago, total, subtotal_efectivo,
-               subtotal_transferencia, es_consignacion, observacion)
-               VALUES (?,?,?,?,?,?,?)""",
+               subtotal_transferencia, es_consignacion, observacion,
+               cajero_id, cajero_nombre)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (caja_id, tipo_pago, total, subtotal_efectivo,
-             subtotal_transferencia, 0, payload.observacion),
+             subtotal_transferencia, 0, payload.observacion,
+             payload.cajero_id, payload.cajero_nombre),
         )
         venta_id = cur.lastrowid
 
@@ -113,16 +117,18 @@ def registrar(payload: VentaPayload):
             costo_unitario = prod["costo"]
             subtotal = cantidad * precio_unitario
             ganancia_unitaria = precio_unitario - costo_unitario
+            # Pérdida de ganancia: si se vende por debajo del precio normal (descuento).
+            perdida_ganancia = max(0.0, prod["precio_venta"] - precio_unitario) * cantidad
             es_cons = 1 if prod["tipo_producto"] == "consignacion" else 0
             if es_cons:
                 es_consignacion_venta = 1
             conn.execute(
                 """INSERT INTO venta_detalle
                    (venta_id, producto_id, cantidad, costo_unitario, precio_unitario,
-                    subtotal, ganancia_unitaria, ganancia_total, es_consignacion)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                    subtotal, ganancia_unitaria, ganancia_total, es_consignacion, perdida_ganancia)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (venta_id, prod["id"], cantidad, costo_unitario, precio_unitario,
-                 subtotal, ganancia_unitaria, ganancia_unitaria * cantidad, es_cons),
+                 subtotal, ganancia_unitaria, ganancia_unitaria * cantidad, es_cons, perdida_ganancia),
             )
             nuevo_stock = max(0, prod["stock_actual"] - cantidad)
             conn.execute("UPDATE productos SET stock_actual=? WHERE id=?", (nuevo_stock, prod["id"]))
@@ -135,10 +141,12 @@ def registrar(payload: VentaPayload):
             conn.execute(
                 """INSERT INTO movimientos_caja
                    (caja_id, tipo_movimiento, concepto, monto, metodo_pago,
-                    relacionado_tipo, relacionado_id, es_extraccion, es_compra_mercancia)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                    relacionado_tipo, relacionado_id, es_extraccion, es_compra_mercancia,
+                    cajero_id, cajero_nombre)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (caja_id, "venta", f"Venta #{venta_id}", subtotal_efectivo,
-                 "efectivo", "venta", venta_id, 0, 0),
+                 "efectivo", "venta", venta_id, 0, 0,
+                 payload.cajero_id, payload.cajero_nombre),
             )
 
         return _detalle_venta(conn, venta_id)

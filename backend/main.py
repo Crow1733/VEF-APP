@@ -4,9 +4,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import init_db
+from database import init_db, migrate
 from seed import run as seed_db
-from routers import auth, categorias, productos, usuarios, cajas, ventas, movimientos, compras, consignaciones, reportes
+from routers import auth, categorias, productos, usuarios, cajas, ventas, movimientos, compras, consignaciones, reportes, gastos, deudas, cierres
 
 app = FastAPI(title="VEF API", version="1.0.0")
 
@@ -27,12 +27,21 @@ app.include_router(movimientos.router)
 app.include_router(compras.router)
 app.include_router(consignaciones.router)
 app.include_router(reportes.router)
+app.include_router(gastos.router)
+app.include_router(deudas.router)
+app.include_router(cierres.router)
 
-FRONT = Path(__file__).parent.parent / "front"
+# Sirve el build de Vite (frontend/dist) si existe; si no, el front/ antiguo.
+# El routing del SPA es por hash (#/...), así que StaticFiles(html=True) basta:
+# todas las rutas de cliente resuelven sobre index.html sin fallback de servidor.
+_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+_LEGACY = Path(__file__).parent.parent / "front"
+FRONT = _DIST if _DIST.exists() else _LEGACY
 app.mount("/", StaticFiles(directory=str(FRONT), html=True), name="front")
 
 
 @app.on_event("startup")
 def startup():
     init_db()
+    migrate()
     seed_db()

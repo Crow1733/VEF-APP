@@ -45,13 +45,16 @@ CREATE TABLE IF NOT EXISTS cajas_config (
 
 CREATE TABLE IF NOT EXISTS cajas (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero          INTEGER,
     fecha_apertura  TEXT NOT NULL DEFAULT (datetime('now')),
     fecha_cierre    TEXT,
     efectivo_inicial REAL NOT NULL DEFAULT 0,
     efectivo_contado REAL,
     diferencia      REAL,
     estado          TEXT NOT NULL DEFAULT 'abierta',
-    observacion     TEXT DEFAULT ''
+    observacion     TEXT DEFAULT '',
+    abierta_por_id  INTEGER,
+    abierta_por     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ventas (
@@ -66,6 +69,8 @@ CREATE TABLE IF NOT EXISTS ventas (
     estado                 TEXT NOT NULL DEFAULT 'completada',
     cancelada_en           TEXT,
     observacion            TEXT DEFAULT '',
+    cajero_id              INTEGER,
+    cajero_nombre          TEXT,
     FOREIGN KEY (caja_id) REFERENCES cajas(id)
 );
 
@@ -80,6 +85,7 @@ CREATE TABLE IF NOT EXISTS venta_detalle (
     ganancia_unitaria REAL NOT NULL DEFAULT 0,
     ganancia_total   REAL NOT NULL DEFAULT 0,
     es_consignacion  INTEGER NOT NULL DEFAULT 0,
+    perdida_ganancia REAL NOT NULL DEFAULT 0,
     FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE,
     FOREIGN KEY (producto_id) REFERENCES productos(id)
 );
@@ -97,6 +103,8 @@ CREATE TABLE IF NOT EXISTS movimientos_caja (
     es_extraccion       INTEGER NOT NULL DEFAULT 0,
     es_compra_mercancia INTEGER NOT NULL DEFAULT 0,
     responsable         TEXT,
+    cajero_id           INTEGER,
+    cajero_nombre       TEXT,
     FOREIGN KEY (caja_id) REFERENCES cajas(id)
 );
 
@@ -107,7 +115,9 @@ CREATE TABLE IF NOT EXISTS compras (
     metodo_pago    TEXT NOT NULL DEFAULT 'efectivo',
     descuenta_fondo INTEGER NOT NULL DEFAULT 1,
     procedencia    TEXT,
-    observacion    TEXT DEFAULT ''
+    observacion    TEXT DEFAULT '',
+    cajero_id      INTEGER,
+    cajero_nombre  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS compra_detalle (
@@ -159,9 +169,54 @@ CREATE TABLE IF NOT EXISTS cierres_semanales (
     efectivo_esperado     REAL NOT NULL DEFAULT 0,
     efectivo_contado      REAL NOT NULL DEFAULT 0,
     diferencia            REAL NOT NULL DEFAULT 0,
-    observacion           TEXT DEFAULT ''
+    observacion           TEXT DEFAULT '',
+    venta_costo           REAL,
+    utilidad_neta         REAL,
+    dividendos            REAL,
+    por_socio             REAL,
+    socios                INTEGER,
+    reserva_pct           REAL,
+    deudas_pagadas        REAL,
+    faltante_sobrante     REAL,
+    cerrada_en            TEXT,
+    snapshot              TEXT
 );
 
+CREATE TABLE IF NOT EXISTS gastos (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha         TEXT NOT NULL DEFAULT (datetime('now')),
+    tipo          TEXT NOT NULL DEFAULT 'otro',
+    concepto      TEXT DEFAULT '',
+    monto         REAL NOT NULL DEFAULT 0,
+    socio         TEXT,
+    caja_id       INTEGER,
+    cajero_id     INTEGER,
+    cajero_nombre TEXT,
+    FOREIGN KEY (caja_id) REFERENCES cajas(id)
+);
+
+CREATE TABLE IF NOT EXISTS cuentas_por_pagar (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha       TEXT NOT NULL DEFAULT (datetime('now')),
+    proveedor   TEXT NOT NULL DEFAULT '',
+    concepto    TEXT DEFAULT '',
+    monto       REAL NOT NULL DEFAULT 0,
+    saldo       REAL NOT NULL DEFAULT 0,
+    estado      TEXT NOT NULL DEFAULT 'pendiente',
+    observacion TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS pagos_deuda (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id   INTEGER NOT NULL,
+    fecha       TEXT NOT NULL DEFAULT (datetime('now')),
+    monto       REAL NOT NULL DEFAULT 0,
+    metodo_pago TEXT NOT NULL DEFAULT 'efectivo',
+    FOREIGN KEY (cuenta_id) REFERENCES cuentas_por_pagar(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);
+CREATE INDEX IF NOT EXISTS idx_pagos_deuda_cuenta ON pagos_deuda(cuenta_id);
 CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria_id);
 CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);
 CREATE INDEX IF NOT EXISTS idx_ventas_caja ON ventas(caja_id);

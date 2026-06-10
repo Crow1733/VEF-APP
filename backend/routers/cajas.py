@@ -56,7 +56,10 @@ def _build_config(conn) -> list[dict]:
 # ── Cajas operativas ──────────────────────────────────────────────────────────
 
 class AbrirPayload(BaseModel):
+    numero: int
     efectivo_inicial: float = 0
+    abierta_por_id: Optional[int] = None
+    abierta_por: Optional[str] = None
 
 
 class CerrarPayload(BaseModel):
@@ -71,6 +74,26 @@ def listar():
     return [dict(r) for r in rows]
 
 
+@router.get("/estado")
+def estado():
+    """Estado de las 3 registradoras fijas: su sesión abierta (o null)."""
+    with get_conn() as conn:
+        result = []
+        for caja in CAJAS_FIJAS:
+            row = conn.execute(
+                "SELECT * FROM cajas WHERE numero=? AND estado='abierta' "
+                "ORDER BY id DESC LIMIT 1",
+                (caja["id"],),
+            ).fetchone()
+            result.append({
+                "numero": caja["id"],
+                "nombre": caja["nombre"],
+                "abierta": bool(row),
+                "caja": dict(row) if row else None,
+            })
+    return result
+
+
 @router.get("/actual")
 def actual():
     with get_conn() as conn:
@@ -82,12 +105,20 @@ def actual():
 
 @router.post("/abrir")
 def abrir(payload: AbrirPayload):
+    if payload.numero not in (1, 2, 3):
+        raise HTTPException(status_code=404, detail="Caja no encontrada")
     with get_conn() as conn:
-        ya = conn.execute("SELECT * FROM cajas WHERE estado='abierta' LIMIT 1").fetchone()
+        # Una sola sesión abierta por número de registradora.
+        ya = conn.execute(
+            "SELECT * FROM cajas WHERE numero=? AND estado='abierta' LIMIT 1",
+            (payload.numero,),
+        ).fetchone()
         if ya:
             return dict(ya)
         cur = conn.execute(
-            "INSERT INTO cajas (efectivo_inicial) VALUES (?)", (payload.efectivo_inicial,)
+            "INSERT INTO cajas (numero, efectivo_inicial, abierta_por_id, abierta_por) "
+            "VALUES (?,?,?,?)",
+            (payload.numero, payload.efectivo_inicial, payload.abierta_por_id, payload.abierta_por),
         )
         row = conn.execute("SELECT * FROM cajas WHERE id=?", (cur.lastrowid,)).fetchone()
     return dict(row)
