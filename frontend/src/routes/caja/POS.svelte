@@ -608,7 +608,7 @@
     position: fixed;
     left: 18px;
     right: 18px;
-    bottom: 18px;
+    bottom: max(18px, env(safe-area-inset-bottom));
     z-index: 60;
     background: transparent;
     border: 0;
@@ -1193,12 +1193,30 @@
       border-radius: 14px;
       margin-bottom: 12px;
     }
+    .header h1 {
+      font-size: 22px;
+    }
     .header,
     .panel-header,
-    .card-top,
-    .cart-line {
+    .card-top {
       flex-direction: column;
       align-items: flex-start;
+    }
+    /* .cart-line es grid: se apila cambiando a una columna, no con flex-direction. */
+    .cart-line {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .line-price {
+      justify-items: stretch;
+      width: 100%;
+    }
+    .price-label {
+      justify-items: start;
+    }
+    .price-input {
+      width: 100%;
+      text-align: left;
     }
     .search-box {
       width: 100%;
@@ -1210,7 +1228,7 @@
     .order-panel {
       left: 10px;
       right: 10px;
-      bottom: 10px;
+      bottom: max(10px, env(safe-area-inset-bottom));
     }
     .product-card-top {
       grid-template-columns: 64px 1fr;

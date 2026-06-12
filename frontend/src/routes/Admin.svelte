@@ -11,6 +11,7 @@
     readFileAsDataUrl,
   } from '../lib/format'
   import type {
+    Caja,
     CajaConfig,
     Categoria,
     Cierre,
@@ -84,6 +85,7 @@
   let productos = $state<Producto[]>([])
   let ventas = $state<Venta[]>([])
   let cajasConfig = $state<CajaConfig[]>([])
+  let cajasHistorial = $state<Caja[]>([])
   let movimientos = $state<Movimiento[]>([])
   let usuarios = $state<Usuario[]>([])
 
@@ -712,6 +714,25 @@
     saveCajaCats(caja, marcar ? categoriasActivas.map((c) => c.id) : [])
   }
 
+  // ── HISTÓRICO DE CAJAS (solo visible para el administrador) ────────────────
+  async function loadCajasHistorial() {
+    // Aplica el cierre automático de medianoche antes de listar, para que el
+    // histórico no muestre cajas viejas todavía "abiertas".
+    try {
+      await api.cajas.cerrarVencidas()
+    } catch {
+      /* ignorar: el listado igualmente las cierra en el backend */
+    }
+    cajasHistorial = await api.cajas.listar()
+  }
+
+  $effect(() => {
+    if (activeTab !== 'caja') return
+    void loadCajasHistorial()
+  })
+
+  const cajasHistorialOrdenado = $derived(cajasHistorial.slice().sort((a, b) => b.id - a.id))
+
   // ── USUARIOS ────────────────────────────────────────────────────────────
   function resetUserForm() {
     editingUserId = null
@@ -1083,6 +1104,52 @@
                   </div>
                 {/each}
               {/if}
+            </div>
+          </article>
+
+          <article class="panel-card">
+            <h2>Histórico de cajas</h2>
+            <p class="muted">
+              Todas las aperturas y cierres de las 3 cajas. Las cajas se cierran solas a medianoche
+              (hora del PC); esas aparecen como «Cierre automático de medianoche».
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Caja</th>
+                    <th>Estado</th>
+                    <th>Apertura</th>
+                    <th>Cierre</th>
+                    <th>Inicial</th>
+                    <th>Contado</th>
+                    <th>Diferencia</th>
+                    <th>Por</th>
+                    <th>Observación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#if !cajasHistorialOrdenado.length}
+                    <tr class="table-empty-row"
+                      ><td colspan="9"><div class="empty-state">No hay cajas registradas.</div></td></tr
+                    >
+                  {:else}
+                    {#each cajasHistorialOrdenado as c (c.id)}
+                      <tr>
+                        <td>Caja {c.numero ?? '—'} · #{c.id}</td>
+                        <td>{c.estado === 'abierta' ? 'Abierta' : 'Cerrada'}</td>
+                        <td>{formatDateTime(c.fecha_apertura)}</td>
+                        <td>{formatDateTime(c.fecha_cierre)}</td>
+                        <td>{formatMoney(c.efectivo_inicial)}</td>
+                        <td>{c.efectivo_contado != null ? formatMoney(c.efectivo_contado) : '-'}</td>
+                        <td>{c.diferencia != null ? formatMoney(c.diferencia) : '-'}</td>
+                        <td>{c.abierta_por || '—'}</td>
+                        <td>{c.observacion || ''}</td>
+                      </tr>
+                    {/each}
+                  {/if}
+                </tbody>
+              </table>
             </div>
           </article>
         </section>

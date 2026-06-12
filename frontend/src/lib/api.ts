@@ -13,6 +13,7 @@ import type {
   CierreDetalle,
   CierrePayload,
   CierreResult,
+  CierreVencidasResult,
   ConsignacionReporte,
   CuadreReporte,
   Compra,
@@ -201,6 +202,7 @@ const cajas = {
       abierta_por: s.cajero_nombre,
     })
   },
+  reabrir: (id: number) => netPost<Caja>(`/cajas/${id}/reabrir`),
   cerrar: (id: number, efectivo_contado: number, obs?: string) =>
     netPost<CierreResult>(`/cajas/${id}/cerrar`, {
       efectivo_contado,
@@ -209,6 +211,8 @@ const cajas = {
       db.kvSet('caja_actual', null)
       return r
     }),
+  /** Cierre automático de medianoche (según la hora local del PC). */
+  cerrarVencidas: () => netPost<CierreVencidasResult>('/cajas/cerrar-vencidas'),
   desgloseEfectivo: (id: number) => netGet<Desglose>(`/cajas/${id}/desglose`),
 }
 

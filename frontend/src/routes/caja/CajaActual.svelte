@@ -10,7 +10,6 @@
     new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(Number(v) || 0)
 
   let estado = $state<CajaEstado[]>([])
-  let historico = $state<Caja[]>([])
 
   // Modal: abrir caja
   let openNumero = $state<number | null>(null)
@@ -25,7 +24,6 @@
 
   async function refresh() {
     estado = await api.cajas.estado()
-    historico = await api.cajas.listar()
     // Sincroniza la caja de trabajo con el estado real (por si la cerraron).
     const wc = get(workingCaja)
     if (wc) {
@@ -50,10 +48,26 @@
   async function abrir(e: SubmitEvent) {
     e.preventDefault()
     if (openNumero == null) return
-    const caja = await api.cajas.abrir(openNumero, Number(aperturaEfectivo) || 0)
-    openNumero = null
-    workingCaja.set(caja)
-    await refresh()
+    try {
+      const caja = await api.cajas.abrir(openNumero, Number(aperturaEfectivo) || 0)
+      openNumero = null
+      workingCaja.set(caja)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo abrir la caja.')
+      await refresh()
+    }
+  }
+
+  async function reabrir(caja: Caja) {
+    try {
+      const abierta = await api.cajas.reabrir(caja.id)
+      workingCaja.set(abierta)
+      await refresh()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo reabrir la caja.')
+      await refresh()
+    }
   }
 
   function pedirCierre(e: SubmitEvent) {
@@ -78,8 +92,6 @@
     await refresh()
   }
 
-  const historicoOrdenado = $derived(historico.slice().sort((a, b) => b.id - a.id))
-
   $effect(() => {
     document.body.classList.toggle('modal-open', openNumero != null || !!detail || confirmCierre)
   })
@@ -91,7 +103,7 @@
   <header class="header">
     <div>
       <h1>Caja actual</h1>
-      <p class="muted">Elige en qué registradora vas a trabajar. Las cajas se abren y cierran de forma independiente.</p>
+      <p class="muted">Elige en qué registradora vas a trabajar. Cada caja se abre una vez al día (se puede reabrir si hace falta) y se cierra sola a medianoche.</p>
     </div>
   </header>
 
@@ -135,6 +147,21 @@
             {$workingCaja?.id === c.id ? 'Ver / cerrar' : 'Trabajar aquí'}
           </span>
         </button>
+      {:else if e.caja_hoy}
+        {@const h = e.caja_hoy}
+        <button class="caja-card cerrada" type="button" onclick={() => reabrir(h)}>
+          <div class="caja-card-head">
+            <h3>{e.nombre}</h3>
+            <span class="estado abrir">Reabrir</span>
+          </div>
+          <div class="caja-info">
+            <div>Abrió <strong>{h.abierta_por || '—'}</strong> con <strong>${money(h.efectivo_inicial)}</strong></div>
+            <div>Cerrada: <strong>{formatDateTime(h.fecha_cierre)}</strong></div>
+            {#if h.observacion}<div>{h.observacion}</div>{/if}
+          </div>
+          <p class="muted">Ya se abrió hoy. Pulsa para reabrir el turno.</p>
+          <span class="caja-action abrir">Reabrir caja</span>
+        </button>
       {:else}
         <button class="caja-card cerrada" type="button" onclick={() => pedirApertura(e.numero)}>
           <div class="caja-card-head">
@@ -147,38 +174,6 @@
       {/if}
     {/each}
   </div>
-
-  <!-- Histórico -->
-  <section class="panel">
-    <div class="panel-header"><h2>Histórico de cajas</h2></div>
-    <div class="list">
-      {#if !historicoOrdenado.length}
-        <div class="empty-state">Sin cajas registradas.</div>
-      {:else}
-        {#each historicoOrdenado as c (c.id)}
-          <article class="history-card {c.estado}">
-            <div class="sale-card-header">
-              <div>
-                <strong>Caja {c.numero ?? '—'} · #{c.id}</strong>
-                <span class="muted">{c.abierta_por || ''}</span>
-              </div>
-              <span class="pill {c.estado === 'abierta' ? '' : 'gray'}">
-                {c.estado === 'abierta' ? 'Abierta' : 'Cerrada'}
-              </span>
-            </div>
-            <div class="meta">
-              <span>Apertura: {formatDateTime(c.fecha_apertura)}</span>
-              <span>Cierre: {formatDateTime(c.fecha_cierre)}</span>
-              <span>Inicial: ${money(c.efectivo_inicial)}</span>
-              <span>Contado: {c.efectivo_contado != null ? '$' + money(c.efectivo_contado) : '-'}</span>
-              <span>Diferencia: {c.diferencia != null ? '$' + money(c.diferencia) : '-'}</span>
-            </div>
-            {#if c.observacion}<div class="muted">{c.observacion}</div>{/if}
-          </article>
-        {/each}
-      {/if}
-    </div>
-  </section>
 </div>
 
 <!-- Modal: abrir caja -->
@@ -414,79 +409,6 @@
     background: linear-gradient(135deg, var(--danger), #ef4444);
   }
 
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow);
-    overflow: hidden;
-  }
-  .panel-header {
-    padding: 18px 20px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface-strong);
-  }
-  .panel-header h2 {
-    margin: 0;
-    font-family: var(--font-display);
-  }
-  .pill {
-    display: inline-flex;
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 700;
-    background: var(--bg-accent-1);
-    color: var(--primary-strong);
-    flex-shrink: 0;
-  }
-  .pill.gray {
-    background: var(--surface-strong);
-    color: var(--muted);
-  }
-
-  .list {
-    padding: 16px;
-    display: grid;
-    gap: 12px;
-  }
-  .history-card {
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px;
-    background: var(--surface);
-    display: grid;
-    gap: 6px;
-  }
-  .history-card .meta {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    color: var(--muted);
-    font-size: 13px;
-  }
-  .history-card.abierta {
-    border-color: var(--success);
-  }
-  .sale-card-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: center;
-  }
-  .sale-card-header > div {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .empty-state {
-    padding: 24px;
-    border: 1px dashed var(--border);
-    border-radius: 18px;
-    color: var(--muted);
-    background: var(--surface-strong);
-    text-align: center;
-  }
-
   /* Formularios */
   .cierre-form {
     display: grid;
@@ -687,9 +609,8 @@
       flex-direction: column;
       align-items: flex-start;
     }
-    .sale-card-header {
-      flex-direction: column;
-      align-items: flex-start;
+    .header h1 {
+      font-size: 22px;
     }
     .modal {
       padding: 10px;

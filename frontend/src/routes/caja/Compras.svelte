@@ -413,6 +413,9 @@
       flex-direction: column;
       align-items: flex-start;
     }
+    .header h1 {
+      font-size: 22px;
+    }
     .cierre-form .btn-primary,
     .cierre-form .btn-outline,
     .cierre-form .btn-ghost {

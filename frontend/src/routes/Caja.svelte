@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { get } from 'svelte/store'
   import { guard, logout } from '../lib/auth'
-  import { syncState } from '../lib/stores'
+  import { api } from '../lib/api'
+  import { syncState, workingCaja } from '../lib/stores'
   import POS from './caja/POS.svelte'
   import Operaciones from './caja/Operaciones.svelte'
   import CajaActual from './caja/CajaActual.svelte'
@@ -11,8 +13,38 @@
   let view = $state<View>('pos')
   let ok = $state(false)
 
+  // ── Cierre automático de medianoche (según la hora local del PC) ──────────
+  let midnightTimer: ReturnType<typeof setTimeout> | undefined
+
+  function msUntilNextMidnight(): number {
+    const now = new Date()
+    // 00:00:05 del día siguiente, para caer ya dentro de la nueva fecha.
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5)
+    return next.getTime() - now.getTime()
+  }
+
+  async function cerrarVencidas() {
+    try {
+      const { cerradas } = await api.cajas.cerrarVencidas()
+      const wc = get(workingCaja)
+      if (wc && cerradas.some((c) => c.id === wc.id)) workingCaja.set(null)
+    } catch {
+      /* sin conexión: el backend las cerrará en la próxima lectura del estado */
+    }
+  }
+
+  function scheduleMidnight() {
+    midnightTimer = setTimeout(async () => {
+      await cerrarVencidas()
+      scheduleMidnight()
+    }, msUntilNextMidnight())
+  }
+
   onMount(() => {
     ok = guard(['cajero'])
+    void cerrarVencidas() // por si quedó una caja de un día anterior abierta
+    scheduleMidnight()
+    return () => clearTimeout(midnightTimer)
   })
 
   const badge = $derived.by(() => {
@@ -71,6 +103,9 @@
     flex-wrap: wrap;
     gap: 10px;
     padding: 14px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
     position: sticky;
     top: 0;
     z-index: 20;
@@ -197,6 +232,23 @@
     .nav-tab {
       padding: 10px 12px;
       font-size: 14px;
+    }
+  }
+  @media (max-width: 520px) {
+    .topbar {
+      padding: max(10px, env(safe-area-inset-top)) 10px 10px;
+    }
+    /* Pestañas en cuadrícula 2×2 para que el texto no quede apretado. */
+    .nav-tab:not(.logout) {
+      flex: 1 1 calc(50% - 8px);
+      font-size: 13px;
+    }
+    .sync-badge {
+      order: 98;
+      margin-left: 0;
+      width: 100%;
+      text-align: center;
+      align-self: stretch;
     }
   }
   @keyframes slideDown {

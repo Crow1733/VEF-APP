@@ -67,29 +67,70 @@ class CerrarPayload(BaseModel):
     observacion: str = ""
 
 
+AUTO_CIERRE_OBS = "Cierre automático de medianoche"
+
+
+def _cerrar_vencidas(conn) -> list[dict]:
+    """Cierra cualquier caja que siga abierta de un día anterior (hora local del
+    PC). Se cuenta como contado = esperado (diferencia 0), porque nadie hizo el
+    arqueo físico. Es idempotente: solo afecta a cajas todavía abiertas."""
+    rows = conn.execute(
+        "SELECT * FROM cajas WHERE estado='abierta' "
+        "AND date(fecha_apertura, 'localtime') < date('now', 'localtime')"
+    ).fetchall()
+    cerradas = []
+    for caja in rows:
+        esperado = _desglose(conn, caja["id"])["efectivo_esperado"]
+        conn.execute(
+            "UPDATE cajas SET fecha_cierre=datetime('now'), efectivo_contado=?, "
+            "diferencia=0, estado='cerrada', observacion=? WHERE id=?",
+            (esperado, AUTO_CIERRE_OBS, caja["id"]),
+        )
+        cerradas.append({"id": caja["id"], "numero": caja["numero"]})
+    return cerradas
+
+
 @router.get("")
 def listar():
     with get_conn() as conn:
+        _cerrar_vencidas(conn)
         rows = conn.execute("SELECT * FROM cajas ORDER BY id DESC").fetchall()
     return [dict(r) for r in rows]
 
 
+@router.post("/cerrar-vencidas")
+def cerrar_vencidas():
+    """Disparador explícito del cierre automático de medianoche."""
+    with get_conn() as conn:
+        cerradas = _cerrar_vencidas(conn)
+    return {"cerradas": cerradas}
+
+
 @router.get("/estado")
 def estado():
-    """Estado de las 3 registradoras fijas: su sesión abierta (o null)."""
+    """Estado de las 3 registradoras fijas: la sesión abierta (o null) y, además,
+    la caja abierta HOY aunque ya esté cerrada, para distinguir abrir vs reabrir."""
     with get_conn() as conn:
+        _cerrar_vencidas(conn)
         result = []
         for caja in CAJAS_FIJAS:
-            row = conn.execute(
+            abierta_row = conn.execute(
                 "SELECT * FROM cajas WHERE numero=? AND estado='abierta' "
+                "ORDER BY id DESC LIMIT 1",
+                (caja["id"],),
+            ).fetchone()
+            hoy_row = conn.execute(
+                "SELECT * FROM cajas WHERE numero=? "
+                "AND date(fecha_apertura, 'localtime') = date('now', 'localtime') "
                 "ORDER BY id DESC LIMIT 1",
                 (caja["id"],),
             ).fetchone()
             result.append({
                 "numero": caja["id"],
                 "nombre": caja["nombre"],
-                "abierta": bool(row),
-                "caja": dict(row) if row else None,
+                "abierta": bool(abierta_row),
+                "caja": dict(abierta_row) if abierta_row else None,
+                "caja_hoy": dict(hoy_row) if hoy_row else None,
             })
     return result
 
@@ -108,6 +149,7 @@ def abrir(payload: AbrirPayload):
     if payload.numero not in (1, 2, 3):
         raise HTTPException(status_code=404, detail="Caja no encontrada")
     with get_conn() as conn:
+        _cerrar_vencidas(conn)
         # Una sola sesión abierta por número de registradora.
         ya = conn.execute(
             "SELECT * FROM cajas WHERE numero=? AND estado='abierta' LIMIT 1",
@@ -115,12 +157,50 @@ def abrir(payload: AbrirPayload):
         ).fetchone()
         if ya:
             return dict(ya)
+        # Una sola apertura por día: si ya se abrió hoy y luego se cerró, no se
+        # crea otra sesión; hay que reabrir la misma.
+        hoy = conn.execute(
+            "SELECT * FROM cajas WHERE numero=? "
+            "AND date(fecha_apertura, 'localtime') = date('now', 'localtime') "
+            "ORDER BY id DESC LIMIT 1",
+            (payload.numero,),
+        ).fetchone()
+        if hoy:
+            raise HTTPException(
+                status_code=409,
+                detail="Esta caja ya fue abierta hoy. Usa «Reabrir» para continuar el turno.",
+            )
         cur = conn.execute(
             "INSERT INTO cajas (numero, efectivo_inicial, abierta_por_id, abierta_por) "
             "VALUES (?,?,?,?)",
             (payload.numero, payload.efectivo_inicial, payload.abierta_por_id, payload.abierta_por),
         )
         row = conn.execute("SELECT * FROM cajas WHERE id=?", (cur.lastrowid,)).fetchone()
+    return dict(row)
+
+
+@router.post("/{id}/reabrir")
+def reabrir(id: int):
+    """Reabre una caja cerrada del mismo día para continuar el turno, sin perder
+    su efectivo inicial, ventas ni movimientos acumulados."""
+    with get_conn() as conn:
+        caja = conn.execute("SELECT * FROM cajas WHERE id=?", (id,)).fetchone()
+        if not caja:
+            raise HTTPException(status_code=404, detail="Caja no encontrada")
+        if caja["estado"] == "abierta":
+            return dict(caja)
+        otra = conn.execute(
+            "SELECT 1 FROM cajas WHERE numero=? AND estado='abierta' AND id!=? LIMIT 1",
+            (caja["numero"], id),
+        ).fetchone()
+        if otra:
+            raise HTTPException(status_code=409, detail="Ya hay una sesión abierta para esta caja.")
+        conn.execute(
+            "UPDATE cajas SET estado='abierta', fecha_cierre=NULL, efectivo_contado=NULL, "
+            "diferencia=NULL WHERE id=?",
+            (id,),
+        )
+        row = conn.execute("SELECT * FROM cajas WHERE id=?", (id,)).fetchone()
     return dict(row)
 
 

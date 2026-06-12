@@ -724,13 +724,20 @@
       border-radius: 14px;
       margin-bottom: 12px;
     }
+    .header h1 {
+      font-size: 22px;
+    }
     .header,
     .panel-header,
     .sale-card-header,
-    .detail-row,
     .product-item-head {
       flex-direction: column;
       align-items: flex-start;
+    }
+    /* .detail-row es grid: se apila pasando a una sola columna. */
+    .detail-row {
+      grid-template-columns: 1fr;
+      gap: 8px;
     }
     .panel,
     .sale-card,

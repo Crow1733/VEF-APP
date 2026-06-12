@@ -76,7 +76,15 @@ export interface CajaEstado {
   numero: number
   nombre: string
   abierta: boolean
+  /** Sesión abierta ahora mismo (o null). */
   caja: Caja | null
+  /** Última caja abierta HOY aunque ya esté cerrada (distingue abrir vs reabrir). */
+  caja_hoy: Caja | null
+}
+
+/** Resultado del cierre automático de medianoche (POST /cajas/cerrar-vencidas). */
+export interface CierreVencidasResult {
+  cerradas: { id: number; numero: number | null }[]
 }
 
 export interface VentaItem {
