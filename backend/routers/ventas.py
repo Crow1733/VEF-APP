@@ -20,6 +20,7 @@ class VentaPayload(BaseModel):
     caja_id: Optional[int] = None
     cajero_id: Optional[int] = None
     cajero_nombre: Optional[str] = None
+    transferencia_socio: Optional[str] = None
 
 
 class FiltrosVenta(BaseModel):
@@ -100,11 +101,11 @@ def registrar(payload: VentaPayload):
         cur = conn.execute(
             """INSERT INTO ventas (caja_id, tipo_pago, total, subtotal_efectivo,
                subtotal_transferencia, es_consignacion, observacion,
-               cajero_id, cajero_nombre)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               cajero_id, cajero_nombre, transferencia_socio)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (caja_id, tipo_pago, total, subtotal_efectivo,
              subtotal_transferencia, 0, payload.observacion,
-             payload.cajero_id, payload.cajero_nombre),
+             payload.cajero_id, payload.cajero_nombre, payload.transferencia_socio),
         )
         venta_id = cur.lastrowid
 
@@ -119,16 +120,20 @@ def registrar(payload: VentaPayload):
             ganancia_unitaria = precio_unitario - costo_unitario
             # Pérdida de ganancia: si se vende por debajo del precio normal (descuento).
             perdida_ganancia = max(0.0, prod["precio_venta"] - precio_unitario) * cantidad
+            # Ganancia por elevación: si se vende por encima del precio de lista (inverso).
+            ganancia_elevacion = max(0.0, precio_unitario - prod["precio_venta"]) * cantidad
             es_cons = 1 if prod["tipo_producto"] == "consignacion" else 0
             if es_cons:
                 es_consignacion_venta = 1
             conn.execute(
                 """INSERT INTO venta_detalle
                    (venta_id, producto_id, cantidad, costo_unitario, precio_unitario,
-                    subtotal, ganancia_unitaria, ganancia_total, es_consignacion, perdida_ganancia)
-                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    subtotal, ganancia_unitaria, ganancia_total, es_consignacion,
+                    perdida_ganancia, ganancia_elevacion)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (venta_id, prod["id"], cantidad, costo_unitario, precio_unitario,
-                 subtotal, ganancia_unitaria, ganancia_unitaria * cantidad, es_cons, perdida_ganancia),
+                 subtotal, ganancia_unitaria, ganancia_unitaria * cantidad, es_cons,
+                 perdida_ganancia, ganancia_elevacion),
             )
             nuevo_stock = max(0, prod["stock_actual"] - cantidad)
             conn.execute("UPDATE productos SET stock_actual=? WHERE id=?", (nuevo_stock, prod["id"]))

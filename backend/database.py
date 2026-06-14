@@ -42,6 +42,15 @@ _MIGRATIONS = [
     ("cierres_semanales", "faltante_sobrante", "REAL"),
     ("cierres_semanales", "cerrada_en", "TEXT"),
     ("cierres_semanales", "snapshot", "TEXT"),
+    # Transferencia por persona/socio (columna "Transferencia jesus" del cuadre)
+    ("ventas", "transferencia_socio", "TEXT"),
+    # Ganancia por elevación de precios (inverso de perdida_ganancia)
+    ("venta_detalle", "ganancia_elevacion", "REAL"),
+    # Detalle por producto del pago de deudas (hoja "Pago de Deudas por Semana")
+    ("pagos_deuda", "producto", "TEXT"),
+    ("pagos_deuda", "cantidad", "REAL"),
+    ("pagos_deuda", "precio_costo", "REAL"),
+    ("pagos_deuda", "precio_vendido", "REAL"),
 ]
 
 

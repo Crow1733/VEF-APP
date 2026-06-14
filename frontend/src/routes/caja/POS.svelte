@@ -40,7 +40,10 @@
   let payTransfer = $state('0')
   let payTotal = $state(0)
   let payError = $state('')
-  let trackEl: HTMLDivElement | undefined
+  // Venta a crédito / libreta (fiado)
+  let payCredito = $state(false)
+  let creditoCliente = $state('')
+  let trackEl = $state<HTMLDivElement>()
   let dragging = false
 
   async function refreshData() {
@@ -154,6 +157,8 @@
     payCash = total.toFixed(2)
     payTransfer = '0.00'
     payError = ''
+    payCredito = false
+    creditoCliente = ''
     showPayment = true
   }
   function closePayment() {
@@ -218,22 +223,32 @@
       closePayment()
       return
     }
-    const cash = Number(payCash) || 0
-    const transfer = Number(payTransfer) || 0
-    const diff = Math.abs(roundMoney(cash + transfer - pendingSale.total))
-    if (cash < 0 || transfer < 0 || diff > 0.01) {
-      payError = 'Efectivo + transferencia debe coincidir con el total.'
-      return
+    const items = pendingSale.items.map((i) => ({
+      producto_id: i.producto_id,
+      cantidad: i.cantidad,
+      precio_unitario: i.precio_unitario,
+    }))
+    if (payCredito) {
+      // Venta a crédito/libreta: requiere nombre de cliente, no requiere reparto.
+      if (!creditoCliente.trim()) {
+        payError = 'Indica el nombre del cliente para la venta a crédito.'
+        return
+      }
+      await api.creditos.registrar({ cliente: creditoCliente.trim(), items })
+    } else {
+      const cash = Number(payCash) || 0
+      const transfer = Number(payTransfer) || 0
+      const diff = Math.abs(roundMoney(cash + transfer - pendingSale.total))
+      if (cash < 0 || transfer < 0 || diff > 0.01) {
+        payError = 'Efectivo + transferencia debe coincidir con el total.'
+        return
+      }
+      await api.ventas.registrar({
+        items,
+        subtotal_efectivo: cash,
+        subtotal_transferencia: transfer,
+      })
     }
-    await api.ventas.registrar({
-      items: pendingSale.items.map((i) => ({
-        producto_id: i.producto_id,
-        cantidad: i.cantidad,
-        precio_unitario: i.precio_unitario,
-      })),
-      subtotal_efectivo: cash,
-      subtotal_transferencia: transfer,
-    })
     cart = []
     pendingSale = null
     closePayment()
@@ -453,6 +468,23 @@
       <button class="btn-outline" type="button" onclick={closePayment}>Cerrar</button>
     </div>
     <div class="modal-body">
+      <label class="credit-toggle">
+        <input type="checkbox" bind:checked={payCredito} />
+        <span>Venta a crédito (libreta) — cobra después</span>
+      </label>
+
+      {#if payCredito}
+        <label class="payment-row">
+          Cliente
+          <input
+            class="edit-input"
+            type="text"
+            maxlength="80"
+            placeholder="Nombre del cliente"
+            bind:value={creditoCliente}
+          />
+        </label>
+      {:else}
       <div class="payment-bar" aria-hidden="true">
         <div
           class="payment-bar-track"
@@ -499,18 +531,23 @@
           />
         </label>
       </div>
+      {/if}
       <div class="payment-summary">
-        <span>Total venta</span>
+        <span>{payCredito ? 'Total a crédito' : 'Total venta'}</span>
         <strong>${money(payTotal)}</strong>
       </div>
-      <div class="payment-summary muted">
-        <span>Asignado</span>
-        <strong>${money(assigned)}</strong>
-      </div>
+      {#if !payCredito}
+        <div class="payment-summary muted">
+          <span>Asignado</span>
+          <strong>${money(assigned)}</strong>
+        </div>
+      {/if}
       <div class="payment-error" role="alert">{payError}</div>
       <div class="footer-actions">
         <button class="btn-ghost" type="button" onclick={closePayment}>Cancelar</button>
-        <button class="btn-primary" type="button" onclick={confirmPayment}>Confirmar venta</button>
+        <button class="btn-primary" type="button" onclick={confirmPayment}>
+          {payCredito ? 'Registrar crédito' : 'Confirmar venta'}
+        </button>
       </div>
     </div>
   </div>
@@ -836,6 +873,23 @@
   .price-input:focus-visible {
     outline: none;
     box-shadow: var(--ring);
+  }
+  .credit-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-strong);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .credit-toggle input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
   }
   .payment-grid {
     display: grid;

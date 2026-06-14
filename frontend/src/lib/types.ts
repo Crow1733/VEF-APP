@@ -211,7 +211,7 @@ export interface Session {
 }
 
 /** Operación encolada en el outbox para sincronizar offline. */
-export type OutboxOp = 'venta' | 'extraccion' | 'pago'
+export type OutboxOp = 'venta' | 'extraccion' | 'pago' | 'baja' | 'credito'
 
 export interface OutboxEntry {
   id?: number
@@ -250,6 +250,98 @@ export interface PagoDeuda {
 }
 
 export interface PagoDeudaPayload {
+  monto: number
+  metodo_pago?: string
+  fecha?: string | null
+  producto?: string | null
+  cantidad?: number | null
+  precio_costo?: number | null
+  precio_vendido?: number | null
+}
+
+// ── Bajas / mermas de inventario ─────────────────────────────────────────────
+export type BajaRazon = 'merma' | 'rotura' | 'vencimiento' | 'robo' | 'otro'
+
+export interface Baja {
+  id: number | string
+  fecha: string
+  producto_id: number
+  cantidad: number
+  costo_unitario: number
+  razon: BajaRazon | string
+  observacion: string
+  caja_id: number | null
+  cajero_id: number | null
+  cajero_nombre: string | null
+  producto_nombre?: string
+  categoria_nombre?: string
+  _offline?: boolean
+}
+
+export interface BajaPayload {
+  producto_id: number
+  cantidad: number
+  razon?: string
+  observacion?: string
+  fecha?: string | null
+  caja_id?: number | null
+  cajero_id?: number | null
+  cajero_nombre?: string | null
+}
+
+// ── Créditos / ventas a libreta (cuentas por cobrar de clientes) ──────────────
+export interface CreditoItem {
+  producto_id: number
+  cantidad: number
+  precio_unitario?: number
+}
+
+export interface CreditoDetalle {
+  id: number
+  credito_id: number
+  producto_id: number
+  cantidad: number
+  costo_unitario: number
+  precio_unitario: number
+  subtotal: number
+  producto_nombre?: string
+  categoria_nombre?: string
+}
+
+export interface Credito {
+  id: number | string
+  fecha: string
+  cliente: string
+  total: number
+  saldo: number
+  estado: 'activa' | 'pagada'
+  observacion: string
+  caja_id: number | null
+  cajero_id: number | null
+  cajero_nombre: string | null
+  items: CreditoDetalle[]
+  _offline?: boolean
+}
+
+export interface CreditoPayload {
+  cliente: string
+  items: CreditoItem[]
+  observacion?: string
+  fecha?: string | null
+  caja_id?: number | null
+  cajero_id?: number | null
+  cajero_nombre?: string | null
+}
+
+export interface PagoCredito {
+  id: number
+  credito_id: number
+  fecha: string
+  monto: number
+  metodo_pago: string
+}
+
+export interface PagoCreditoPayload {
   monto: number
   metodo_pago?: string
   fecha?: string | null

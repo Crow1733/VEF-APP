@@ -21,7 +21,8 @@
       "Bash(grep -v \"tipo_producto\\\\|es_consignacion\\\\|consignador\\\\|Consignación$\\\\|categoria_nombre\\\\|product-type\")",
       "Bash(grep -n \"^// CAJA$\\\\|^// COMPRAS$\" /home/david/Proyectos/VEF-APP/front/Administrador/js/administrador.js)",
       "Bash(node --check /home/david/Proyectos/VEF-APP/front/js/api.js)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(.venv/bin/python -c ' *)"
     ]
   }
 }

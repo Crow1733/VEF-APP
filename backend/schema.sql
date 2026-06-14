@@ -215,8 +215,78 @@ CREATE TABLE IF NOT EXISTS pagos_deuda (
     FOREIGN KEY (cuenta_id) REFERENCES cuentas_por_pagar(id) ON DELETE CASCADE
 );
 
+-- Bajas / mermas de inventario (roturas, pérdidas, retiros). Descuentan stock.
+CREATE TABLE IF NOT EXISTS bajas (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha          TEXT NOT NULL DEFAULT (datetime('now')),
+    producto_id    INTEGER NOT NULL,
+    cantidad       REAL NOT NULL DEFAULT 0,
+    costo_unitario REAL NOT NULL DEFAULT 0,
+    razon          TEXT NOT NULL DEFAULT 'merma',
+    observacion    TEXT DEFAULT '',
+    caja_id        INTEGER,
+    cajero_id      INTEGER,
+    cajero_nombre  TEXT,
+    FOREIGN KEY (producto_id) REFERENCES productos(id)
+);
+
+-- Ventas a crédito / libreta (fiado). Descuentan stock y crean cuenta por cobrar.
+-- Base caja: NO entran al cuadre hasta que se cobran (ver pagos_credito).
+CREATE TABLE IF NOT EXISTS creditos (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha         TEXT NOT NULL DEFAULT (datetime('now')),
+    cliente       TEXT NOT NULL DEFAULT '',
+    total         REAL NOT NULL DEFAULT 0,
+    saldo         REAL NOT NULL DEFAULT 0,
+    estado        TEXT NOT NULL DEFAULT 'activa',
+    observacion   TEXT DEFAULT '',
+    caja_id       INTEGER,
+    cajero_id     INTEGER,
+    cajero_nombre TEXT,
+    FOREIGN KEY (caja_id) REFERENCES cajas(id)
+);
+
+CREATE TABLE IF NOT EXISTS credito_detalle (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    credito_id      INTEGER NOT NULL,
+    producto_id     INTEGER NOT NULL,
+    cantidad        REAL NOT NULL DEFAULT 1,
+    costo_unitario  REAL NOT NULL DEFAULT 0,
+    precio_unitario REAL NOT NULL DEFAULT 0,
+    subtotal        REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (credito_id) REFERENCES creditos(id) ON DELETE CASCADE,
+    FOREIGN KEY (producto_id) REFERENCES productos(id)
+);
+
+CREATE TABLE IF NOT EXISTS pagos_credito (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    credito_id    INTEGER NOT NULL,
+    fecha         TEXT NOT NULL DEFAULT (datetime('now')),
+    monto         REAL NOT NULL DEFAULT 0,
+    metodo_pago   TEXT NOT NULL DEFAULT 'efectivo',
+    caja_id       INTEGER,
+    cajero_id     INTEGER,
+    cajero_nombre TEXT,
+    FOREIGN KEY (credito_id) REFERENCES creditos(id) ON DELETE CASCADE
+);
+
+-- Foto del stock por producto al inicio de cada semana (para "stock inicial" del Excel).
+CREATE TABLE IF NOT EXISTS stock_snapshots (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha       TEXT NOT NULL DEFAULT (datetime('now')),
+    producto_id INTEGER NOT NULL,
+    stock       REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (producto_id) REFERENCES productos(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha);
 CREATE INDEX IF NOT EXISTS idx_pagos_deuda_cuenta ON pagos_deuda(cuenta_id);
+CREATE INDEX IF NOT EXISTS idx_bajas_fecha ON bajas(fecha);
+CREATE INDEX IF NOT EXISTS idx_bajas_producto ON bajas(producto_id);
+CREATE INDEX IF NOT EXISTS idx_creditos_fecha ON creditos(fecha);
+CREATE INDEX IF NOT EXISTS idx_credito_detalle_credito ON credito_detalle(credito_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_credito_credito ON pagos_credito(credito_id);
+CREATE INDEX IF NOT EXISTS idx_stock_snapshots_fecha ON stock_snapshots(fecha);
 CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria_id);
 CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha);
 CREATE INDEX IF NOT EXISTS idx_ventas_caja ON ventas(caja_id);

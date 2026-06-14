@@ -5,12 +5,20 @@
   import { session } from '../../lib/auth'
   import { workingCaja } from '../../lib/stores'
   import { formatDateTime, TIPO_PAGO_LABELS } from '../../lib/format'
-  import type { Movimiento, Venta } from '../../lib/types'
+  import type { Movimiento, Venta, Baja, Producto } from '../../lib/types'
 
   const money = (v: number | string) =>
     new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(Number(v) || 0)
 
-  type Section = 'active' | 'canceled' | 'withdrawals'
+  type Section = 'active' | 'canceled' | 'withdrawals' | 'bajas'
+
+  const RAZONES: { value: string; label: string }[] = [
+    { value: 'merma', label: 'Merma' },
+    { value: 'rotura', label: 'Rotura' },
+    { value: 'vencimiento', label: 'Vencimiento' },
+    { value: 'robo', label: 'Robo' },
+    { value: 'otro', label: 'Otro' },
+  ]
 
   let ventas = $state<Venta[]>([])
   let withdrawals = $state<Movimiento[]>([])
@@ -26,6 +34,15 @@
   let wNote = $state('')
   let wError = $state('')
 
+  // Bajas / mermas
+  let bajasList = $state<Baja[]>([])
+  let productos = $state<Producto[]>([])
+  let bProductoId = $state<number | null>(null)
+  let bCantidad = $state<number | null>(null)
+  let bRazon = $state('merma')
+  let bNota = $state('')
+  let bError = $state('')
+
   async function refresh() {
     const wc = $workingCaja
     if (wc) {
@@ -36,6 +53,40 @@
       ventas = []
       withdrawals = []
     }
+    productos = (await api.productos.listar()).filter((p) => p.activa)
+    bajasList = await api.bajas.listar()
+  }
+
+  async function submitBaja(e: SubmitEvent) {
+    e.preventDefault()
+    const pid = Number(bProductoId) || 0
+    const cant = Number(bCantidad) || 0
+    if (!pid) {
+      bError = 'Selecciona un producto.'
+      return
+    }
+    if (cant <= 0) {
+      bError = 'Ingresa una cantidad válida.'
+      return
+    }
+    await api.bajas.registrar({
+      producto_id: pid,
+      cantidad: cant,
+      razon: bRazon,
+      observacion: bNota.trim(),
+    })
+    bProductoId = null
+    bCantidad = null
+    bRazon = 'merma'
+    bNota = ''
+    bError = ''
+    await refresh()
+  }
+
+  async function deleteBaja(b: Baja) {
+    if (typeof b.id !== 'number') return
+    await api.bajas.eliminar(b.id)
+    await refresh()
   }
 
   function matches(v: Venta, term: string) {
@@ -107,7 +158,7 @@
   </header>
 
   <div class="op-tabs">
-    {#each [['active', 'Ventas realizadas'], ['canceled', 'Ventas canceladas'], ['withdrawals', 'Extracciones directas']] as [s, label] (s)}
+    {#each [['active', 'Ventas realizadas'], ['canceled', 'Ventas canceladas'], ['withdrawals', 'Extracciones directas'], ['bajas', 'Bajas / mermas']] as [s, label] (s)}
       <button
         class="op-tab"
         class:active={activeSection === s}
@@ -235,6 +286,73 @@
                     <span class="pill">${money(m.monto)}</span>
                   </div>
                   <div class="muted">{m.concepto}</div>
+                </article>
+              {/each}
+            {/if}
+          </div>
+        </div>
+      </section>
+    {/if}
+
+    {#if activeSection === 'bajas'}
+      <section class="panel op-section active">
+        <div class="panel-header">
+          <div>
+            <h2>Bajas / mermas</h2>
+            <p class="muted">Roturas, pérdidas o retiros que descuentan stock.</p>
+          </div>
+        </div>
+        <div class="list">
+          <form class="withdrawal-form" onsubmit={submitBaja}>
+            <label>
+              Producto
+              <select class="edit-input" bind:value={bProductoId}>
+                <option value={null} disabled selected>Selecciona un producto…</option>
+                {#each productos as p (p.id)}
+                  <option value={p.id}>{p.nombre} (stock {p.stock_actual})</option>
+                {/each}
+              </select>
+            </label>
+            <label>
+              Cantidad
+              <input class="edit-input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0" bind:value={bCantidad} />
+            </label>
+            <label>
+              Razón
+              <select class="edit-input" bind:value={bRazon}>
+                {#each RAZONES as r (r.value)}
+                  <option value={r.value}>{r.label}</option>
+                {/each}
+              </select>
+            </label>
+            <label>
+              Observación (opcional)
+              <input class="edit-input" type="text" maxlength="120" placeholder="Detalle de la baja" bind:value={bNota} />
+            </label>
+            <div class="withdrawal-actions">
+              <button class="btn-primary" type="submit">Registrar baja</button>
+            </div>
+            <div class="form-error" role="alert">{bError}</div>
+          </form>
+          <div class="withdrawal-list">
+            {#if !bajasList.length}
+              <div class="empty-state">Sin bajas registradas.</div>
+            {:else}
+              {#each bajasList as b (b.id)}
+                <article class="sale-card">
+                  <div class="sale-card-header">
+                    <div>
+                      <strong>{b.producto_nombre || `Producto #${b.producto_id}`}</strong>
+                      <span class="muted">{formatDateTime(b.fecha)}</span>
+                    </div>
+                    <span class="pill danger">-{b.cantidad}</span>
+                  </div>
+                  <div class="muted">
+                    {b.razon}{b.observacion ? ` · ${b.observacion}` : ''}
+                  </div>
+                  {#if typeof b.id === 'number'}
+                    <button class="btn-outline" type="button" onclick={() => deleteBaja(b)}>Eliminar (restaura stock)</button>
+                  {/if}
                 </article>
               {/each}
             {/if}

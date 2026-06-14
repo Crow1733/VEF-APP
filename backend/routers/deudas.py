@@ -18,6 +18,11 @@ class PagoPayload(BaseModel):
     monto: float
     metodo_pago: str = "efectivo"
     fecha: Optional[str] = None
+    # Detalle opcional por producto (hoja "Pago de Deudas por Semana")
+    producto: Optional[str] = None
+    cantidad: Optional[float] = None
+    precio_costo: Optional[float] = None
+    precio_vendido: Optional[float] = None
 
 
 @router.get("")
@@ -61,16 +66,18 @@ def pagar(id: int, payload: PagoPayload):
         cuenta = conn.execute("SELECT * FROM cuentas_por_pagar WHERE id=?", (id,)).fetchone()
         if not cuenta:
             raise HTTPException(status_code=404, detail="Cuenta no encontrada")
+        cols = ["cuenta_id", "monto", "metodo_pago",
+                "producto", "cantidad", "precio_costo", "precio_vendido"]
+        vals = [id, payload.monto, payload.metodo_pago,
+                payload.producto, payload.cantidad, payload.precio_costo, payload.precio_vendido]
         if payload.fecha:
-            conn.execute(
-                "INSERT INTO pagos_deuda (cuenta_id, fecha, monto, metodo_pago) VALUES (?,?,?,?)",
-                (id, payload.fecha, payload.monto, payload.metodo_pago),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO pagos_deuda (cuenta_id, monto, metodo_pago) VALUES (?,?,?)",
-                (id, payload.monto, payload.metodo_pago),
-            )
+            cols.append("fecha")
+            vals.append(payload.fecha)
+        placeholders = ",".join("?" * len(cols))
+        conn.execute(
+            f"INSERT INTO pagos_deuda ({','.join(cols)}) VALUES ({placeholders})",
+            tuple(vals),
+        )
         nuevo_saldo = max(0.0, cuenta["saldo"] - payload.monto)
         estado = "pagada" if nuevo_saldo <= 0 else "pendiente"
         conn.execute(

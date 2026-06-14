@@ -110,6 +110,13 @@ def cerrar(payload: CierrePayload):
              c["socios"], c["reserva_pct"], c["movimientos"]["deudas_pagadas"],
              c["faltante_sobrante"], payload.observacion, json.dumps(c)),
         )
+        # Foto del stock al cierre: sirve como "stock inicial" de la semana siguiente
+        # (el export lee el último snapshot con fecha <= desde para la columna F).
+        for pr in conn.execute("SELECT id, stock_actual FROM productos").fetchall():
+            conn.execute(
+                "INSERT INTO stock_snapshots (fecha, producto_id, stock) VALUES (?,?,?)",
+                (payload.hasta, pr["id"], pr["stock_actual"]),
+            )
         row = conn.execute("SELECT * FROM cierres_semanales WHERE id=?", (cur.lastrowid,)).fetchone()
     d = dict(row)
     d["cuadre"] = c

@@ -55,6 +55,8 @@ async function syncOutboxFromSW(): Promise<void> {
     if (op.op === 'venta') url = '/api/ventas'
     else if (op.op === 'extraccion') url = '/api/movimientos/extraccion'
     else if (op.op === 'pago') url = '/api/movimientos/pago'
+    else if (op.op === 'baja') url = '/api/bajas'
+    else if (op.op === 'credito') url = '/api/creditos'
     else {
       await delOutbox(db, op.id)
       continue

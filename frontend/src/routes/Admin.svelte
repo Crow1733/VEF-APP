@@ -18,6 +18,7 @@
     ConsignacionReporte,
     CuadreReporte,
     CuentaPorPagar,
+    Credito,
     Gasto,
     InventarioReporte,
     Movimiento,
@@ -32,7 +33,7 @@
 
   type MainTab = 'productos' | 'categorias' | 'caja' | 'economia' | 'usuarios'
   // prettier-ignore
-  type EconTab = 'ventas' | 'extracciones' | 'reportes' | 'inventario' | 'gastos' | 'consignaciones' | 'deudas' | 'cuadre' | 'historial'
+  type EconTab = 'ventas' | 'extracciones' | 'reportes' | 'inventario' | 'gastos' | 'consignaciones' | 'deudas' | 'creditos' | 'cuadre' | 'historial'
   type CajaSel = 'all' | number
 
   // ── Estado de navegación / filtros ──────────────────────────────────────
@@ -48,6 +49,7 @@
     gastos: CajaSel
     consignaciones: CajaSel
     deudas: CajaSel
+    creditos: CajaSel
     cuadre: CajaSel
     historial: CajaSel
   }>({
@@ -58,6 +60,7 @@
     gastos: 'all',
     consignaciones: 'all',
     deudas: 'all',
+    creditos: 'all',
     cuadre: 'all',
     historial: 'all',
   })
@@ -166,6 +169,14 @@
   let payMonto = $state<number | null>(null)
   let payMetodo = $state('efectivo')
   const totalAdeudado = $derived(deudasList.reduce((s, c) => s + c.saldo, 0))
+
+  // ── Créditos / ventas a libreta (cuentas por cobrar) ────────────────────────
+  let creditosList = $state<Credito[]>([])
+  // Modal de cobro
+  let payCred = $state<Credito | null>(null)
+  let payCredMonto = $state<number | null>(null)
+  let payCredMetodo = $state('efectivo')
+  const totalPorCobrar = $derived(creditosList.reduce((s, c) => s + c.saldo, 0))
 
   // ── Cuadre / cierre semanal ─────────────────────────────────────────────────
   let cuadre = $state<CuadreReporte | null>(null)
@@ -450,6 +461,45 @@
       onConfirm: async () => {
         await api.deudas.eliminar(c.id)
         await loadDeudas()
+      },
+    })
+  }
+
+  // ── Créditos / ventas a libreta ─────────────────────────────────────────────
+  async function loadCreditos() {
+    creditosList = await api.creditos.listar()
+  }
+
+  $effect(() => {
+    if (!ready) return
+    if (activeTab !== 'economia' || activeEconomia !== 'creditos') return
+    loadCreditos()
+  })
+
+  function openCobro(c: Credito) {
+    payCred = c
+    payCredMonto = c.saldo
+    payCredMetodo = 'efectivo'
+  }
+  async function confirmCobro() {
+    if (!payCred || typeof payCred.id !== 'number') return
+    const monto = Number(payCredMonto) || 0
+    if (monto <= 0) return
+    await api.creditos.pagar(payCred.id, { monto, metodo_pago: payCredMetodo })
+    payCred = null
+    await loadCreditos()
+  }
+
+  function deleteCredito(c: Credito) {
+    if (typeof c.id !== 'number') return
+    const id = c.id
+    showConfirm({
+      title: `Eliminar crédito #${id}`,
+      text: `Se eliminará el crédito de "${c.cliente}" (${formatMoney(c.total)}). Si está activo, se devuelve el stock.`,
+      okLabel: 'Sí, eliminar',
+      onConfirm: async () => {
+        await api.creditos.eliminar(id)
+        await loadCreditos()
       },
     })
   }
@@ -1159,7 +1209,7 @@
       {#if activeTab === 'economia'}
         <section class="tab-panel active">
           <nav class="sub-tabs">
-            {#each [['ventas', 'Ventas'], ['extracciones', 'Extracciones'], ['reportes', 'Reportes'], ['inventario', 'Inventario'], ['gastos', 'Gastos'], ['consignaciones', 'Consignaciones'], ['deudas', 'Cuentas x pagar'], ['cuadre', 'Cuadre'], ['historial', 'Multi-semana']] as [t, label] (t)}
+            {#each [['ventas', 'Ventas'], ['extracciones', 'Extracciones'], ['reportes', 'Reportes'], ['inventario', 'Inventario'], ['gastos', 'Gastos'], ['consignaciones', 'Consignaciones'], ['deudas', 'Cuentas x pagar'], ['creditos', 'Cuentas x cobrar'], ['cuadre', 'Cuadre'], ['historial', 'Multi-semana']] as [t, label] (t)}
               <button
                 class="sub-tab-button"
                 class:active={activeEconomia === t}
@@ -1313,6 +1363,11 @@
                     <label>Hasta<input type="date" bind:value={reportTo} /></label>
                     <button class="btn" type="button" onclick={applyReportRange}>Aplicar</button>
                   </div>
+                </div>
+                <div style="margin-top:0.8rem">
+                  <button class="btn export" type="button" onclick={() => api.reportes.exportExcel(reportFrom || null, reportTo || null)}>
+                    Descargar Excel
+                  </button>
                 </div>
               </article>
 
@@ -1636,6 +1691,59 @@
                             <td data-label="Concepto"></td>
                             <td data-label="Monto"></td>
                             <td data-label="Saldo"><strong>{formatMoney(totalAdeudado)}</strong></td>
+                            <td data-label="Estado"></td>
+                            <td data-label="Acciones"></td>
+                          </tr>
+                        {/if}
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+            </div>
+          {/if}
+
+          {#if activeEconomia === 'creditos'}
+            <div class="econ-panel active">
+              <div class="panel-grid">
+                <article class="panel-card">
+                  <div class="card-head-row">
+                    <h2>Cuentas por cobrar (libreta)</h2>
+                    <span class="muted">Saldo total: <strong>{formatMoney(totalPorCobrar)}</strong></span>
+                  </div>
+                  <p class="muted">Ventas a crédito registradas desde el punto de venta (Caja → Crédito).</p>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr>
+                      </thead>
+                      <tbody>
+                        {#if !creditosList.length}
+                          <tr class="table-empty-row"><td colspan="6"><div class="empty-state">No hay cuentas por cobrar.</div></td></tr>
+                        {:else}
+                          {#each creditosList as c (c.id)}
+                            <tr>
+                              <td data-label="Fecha">{formatDate(c.fecha)}</td>
+                              <td data-label="Cliente">{c.cliente || '-'}</td>
+                              <td data-label="Total">{formatMoney(c.total)}</td>
+                              <td data-label="Saldo">{formatMoney(c.saldo)}</td>
+                              <td data-label="Estado">
+                                {#if c.estado === 'pagada'}<span class="badge visible">Cobrada</span>
+                                {:else}<span class="badge hidden">Activa</span>{/if}
+                              </td>
+                              <td data-label="Acciones">
+                                <div class="row-actions">
+                                  <button class="btn" onclick={() => openCobro(c)} disabled={c.estado === 'pagada'}>Cobrar</button>
+                                  <button class="btn danger" onclick={() => deleteCredito(c)}>Eliminar</button>
+                                </div>
+                              </td>
+                            </tr>
+                          {/each}
+                          <tr class="total-row">
+                            <td data-label="Fecha"></td>
+                            <td data-label="Cliente"><strong>TOTAL</strong></td>
+                            <td data-label="Total"></td>
+                            <td data-label="Saldo"><strong>{formatMoney(totalPorCobrar)}</strong></td>
                             <td data-label="Estado"></td>
                             <td data-label="Acciones"></td>
                           </tr>
@@ -1980,6 +2088,38 @@
         </div>
       </div>
     {/if}
+
+    {#if payCred}
+      <div class="modal show">
+        <button class="modal-backdrop" aria-label="Cerrar" onclick={() => (payCred = null)}></button>
+        <div class="modal-card confirm-card">
+          <div class="modal-head">
+            <h3>Cobrar crédito · {payCred.cliente}</h3>
+            <button class="btn" onclick={() => (payCred = null)}>Cerrar</button>
+          </div>
+          <div class="modal-content">
+            <div class="confirm-box">
+              <p class="muted">Saldo actual: <strong>{formatMoney(payCred.saldo)}</strong></p>
+              <label>
+                Monto a cobrar
+                <input type="number" min="0" step="0.01" bind:value={payCredMonto} />
+              </label>
+              <label>
+                Método de cobro
+                <select bind:value={payCredMetodo}>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="transferencia">Transferencia</option>
+                </select>
+              </label>
+              <div class="detail-actions">
+                <button class="btn" onclick={() => (payCred = null)}>Cancelar</button>
+                <button class="btn primary" onclick={confirmCobro}>Registrar cobro</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -2079,6 +2219,13 @@
     background: linear-gradient(135deg, var(--danger), #ef4444);
     color: #ffffff;
     border-color: transparent;
+  }
+  .btn.export {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #ffffff;
+    border-color: transparent;
+    padding: 0.5rem 1.2rem;
+    font-weight: 600;
   }
   .btn:focus-visible,
   .tab-button:focus-visible,

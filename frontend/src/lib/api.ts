@@ -39,6 +39,12 @@ import type {
   VentaItem,
   VentaPayload,
   VentasFiltro,
+  Baja,
+  BajaPayload,
+  Credito,
+  CreditoPayload,
+  PagoCredito,
+  PagoCreditoPayload,
 } from './types'
 
 const BASE = '/api'
@@ -94,7 +100,10 @@ function isNetworkError(e: unknown): boolean {
 }
 
 // ── Encolar op pendiente ───────────────────────────────────────────────────
-async function queue(op: 'venta' | 'extraccion' | 'pago', payload: unknown): Promise<void> {
+async function queue(
+  op: 'venta' | 'extraccion' | 'pago' | 'baja' | 'credito',
+  payload: unknown,
+): Promise<void> {
   await db.pushOutbox(op, payload)
   window.dispatchEvent(new CustomEvent('vef:queue-op'))
 }
@@ -348,6 +357,32 @@ const reportes = {
     qs.set('reserva_pct', String(reserva_pct))
     return netGet<CuadreReporte>('/reportes/cuadre?' + qs)
   },
+  movimientosDiarios: (desde?: string | null, hasta?: string | null) => {
+    const qs = new URLSearchParams()
+    if (desde) qs.set('desde', desde)
+    if (hasta) qs.set('hasta', hasta)
+    return netGet<{ categorias: unknown[]; dias: string[] }>('/reportes/movimientos-diarios?' + qs)
+  },
+  cobroDiario: (desde?: string | null, hasta?: string | null) => {
+    const qs = new URLSearchParams()
+    if (desde) qs.set('desde', desde)
+    if (hasta) qs.set('hasta', hasta)
+    return netGet<{ dias: string[]; categorias: unknown[]; totales_por_dia: Record<string, number> }>(
+      '/reportes/cobro-diario?' + qs,
+    )
+  },
+  exportExcel: (desde?: string | null, hasta?: string | null) => {
+    const qs = new URLSearchParams()
+    if (desde) qs.set('desde', desde)
+    if (hasta) qs.set('hasta', hasta)
+    const url = BASE + '/reportes/export-excel?' + qs
+    const a = document.createElement('a')
+    a.href = url
+    a.download = ''
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  },
 }
 
 // ── Gastos ───────────────────────────────────────────────────────────────────
@@ -382,6 +417,107 @@ const deudas = {
   eliminar: (id: number) => netDel<{ ok: boolean }>(`/deudas/${id}`),
 }
 
+// ── Bajas / mermas de inventario ─────────────────────────────────────────────
+async function _bajaOffline(payload: BajaPayload): Promise<Baja> {
+  const prod = await db.get<Producto>('productos', payload.producto_id)
+  if (prod) {
+    prod.stock_actual = Math.max(0, (prod.stock_actual || 0) - payload.cantidad)
+    await db.put('productos', prod)
+  }
+  await queue('baja', payload)
+  return {
+    ...payload,
+    id: 'off_' + Date.now(),
+    fecha: payload.fecha || new Date().toISOString(),
+    costo_unitario: 0,
+    _offline: true,
+  } as unknown as Baja
+}
+
+const bajas = {
+  listar: async (params?: {
+    desde?: string | null
+    hasta?: string | null
+    producto_id?: number | null
+    categoria_id?: number | null
+  }): Promise<Baja[]> => {
+    const qs = new URLSearchParams()
+    if (params?.desde) qs.set('desde', params.desde)
+    if (params?.hasta) qs.set('hasta', params.hasta)
+    if (params?.producto_id != null) qs.set('producto_id', String(params.producto_id))
+    if (params?.categoria_id != null) qs.set('categoria_id', String(params.categoria_id))
+    const q = qs.toString()
+    try {
+      const data = await netGet<Baja[]>('/bajas' + (q ? '?' + q : ''))
+      db.kvSet('bajas_list', data)
+      return data
+    } catch (e) {
+      if (isNetworkError(e)) return (await db.kvGet<Baja[]>('bajas_list')) ?? []
+      throw e
+    }
+  },
+  registrar: async (payload: BajaPayload): Promise<Baja> => {
+    const full: BajaPayload = { ...opMeta(), ...payload }
+    try {
+      return await netPost<Baja>('/bajas', full)
+    } catch (e) {
+      if (isNetworkError(e)) return _bajaOffline(full)
+      throw e
+    }
+  },
+  eliminar: (id: number) => netDel<{ ok: boolean }>(`/bajas/${id}`),
+}
+
+// ── Créditos / ventas a libreta (cuentas por cobrar) ─────────────────────────
+async function _creditoOffline(payload: CreditoPayload): Promise<Credito> {
+  if (Array.isArray(payload.items)) {
+    for (const item of payload.items) {
+      const p = await db.get<Producto>('productos', item.producto_id)
+      if (p) {
+        p.stock_actual = Math.max(0, (p.stock_actual || 0) - item.cantidad)
+        await db.put('productos', p)
+      }
+    }
+  }
+  await queue('credito', payload)
+  const total = payload.items.reduce((s, i) => s + (i.precio_unitario ?? 0) * i.cantidad, 0)
+  return {
+    ...payload,
+    id: 'off_' + Date.now(),
+    fecha: payload.fecha || new Date().toISOString(),
+    total,
+    saldo: total,
+    estado: 'activa',
+    items: [],
+    _offline: true,
+  } as unknown as Credito
+}
+
+const creditos = {
+  listar: async (estado?: string | null): Promise<Credito[]> => {
+    try {
+      const data = await netGet<Credito[]>('/creditos' + (estado ? `?estado=${estado}` : ''))
+      db.kvSet('creditos_list', data)
+      return data
+    } catch (e) {
+      if (isNetworkError(e)) return (await db.kvGet<Credito[]>('creditos_list')) ?? []
+      throw e
+    }
+  },
+  registrar: async (payload: CreditoPayload): Promise<Credito> => {
+    const full: CreditoPayload = { ...opMeta(), ...payload }
+    try {
+      return await netPost<Credito>('/creditos', full)
+    } catch (e) {
+      if (isNetworkError(e)) return _creditoOffline(full)
+      throw e
+    }
+  },
+  pagar: (id: number, p: PagoCreditoPayload) => netPost<Credito>(`/creditos/${id}/pago`, p),
+  pagos: (id: number) => netGet<PagoCredito[]>(`/creditos/${id}/pagos`),
+  eliminar: (id: number) => netDel<{ ok: boolean }>(`/creditos/${id}`),
+}
+
 export const api = {
   categorias,
   productos,
@@ -396,6 +532,8 @@ export const api = {
   gastos,
   deudas,
   cierres,
+  bajas,
+  creditos,
 }
 
 export type Api = typeof api

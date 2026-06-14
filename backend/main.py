@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db, migrate
 from seed import run as seed_db
-from routers import auth, categorias, productos, usuarios, cajas, ventas, movimientos, compras, consignaciones, reportes, gastos, deudas, cierres
+from routers import auth, categorias, productos, usuarios, cajas, ventas, movimientos, compras, consignaciones, reportes, gastos, deudas, cierres, bajas, creditos
 
 app = FastAPI(title="VEF API", version="1.0.0")
 
@@ -30,6 +30,8 @@ app.include_router(reportes.router)
 app.include_router(gastos.router)
 app.include_router(deudas.router)
 app.include_router(cierres.router)
+app.include_router(bajas.router)
+app.include_router(creditos.router)
 
 # Sirve el build de Vite (frontend/dist) si existe; si no, el front/ antiguo.
 # El routing del SPA es por hash (#/...), así que StaticFiles(html=True) basta:

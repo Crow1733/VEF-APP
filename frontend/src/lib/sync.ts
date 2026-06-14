@@ -34,6 +34,8 @@ export async function processOutbox(): Promise<void> {
       if (op.op === 'venta') url = '/api/ventas'
       else if (op.op === 'extraccion') url = '/api/movimientos/extraccion'
       else if (op.op === 'pago') url = '/api/movimientos/pago'
+      else if (op.op === 'baja') url = '/api/bajas'
+      else if (op.op === 'credito') url = '/api/creditos'
       else {
         if (op.id != null) await db.delOutbox(op.id)
         synced++
