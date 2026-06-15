@@ -40,6 +40,10 @@ def listar():
 
 @router.post("")
 def crear(payload: UsuarioCreate):
+    if not payload.nombre.strip():
+        raise HTTPException(status_code=422, detail="El nombre no puede estar vacío")
+    if not payload.usuario.strip():
+        raise HTTPException(status_code=422, detail="El nombre de usuario no puede estar vacío")
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO usuarios (nombre, usuario, clave_hash, rol) VALUES (?,?,?,?)",

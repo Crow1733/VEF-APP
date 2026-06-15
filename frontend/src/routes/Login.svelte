@@ -51,10 +51,6 @@
     <main class="card">
       <div class="card-head">
         <h2>Iniciar sesión</h2>
-        <p class="muted">
-          Usuarios de prueba: <strong>admin / admin123</strong> ·
-          <strong>caja / caja123</strong>
-        </p>
       </div>
       <form class="form" onsubmit={onSubmit}>
         <label>
@@ -161,10 +157,6 @@
     margin: 0 0 6px;
     font-family: var(--font-display);
     font-size: 24px;
-  }
-
-  .card-head p {
-    margin: 0;
   }
 
   .form {

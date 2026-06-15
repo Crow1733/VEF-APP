@@ -21,6 +21,7 @@
   let cierreContado = $state<number | null>(null)
   let cierreObs = $state('')
   let confirmCierre = $state(false)
+  let cierreMsg = $state('')
 
   async function refresh() {
     estado = await api.cajas.estado()
@@ -33,6 +34,7 @@
   }
 
   async function trabajar(caja: Caja) {
+    cierreMsg = ''
     workingCaja.set(caja)
     detail = caja
     desglose = await api.cajas.desgloseEfectivo(caja.id)
@@ -82,7 +84,9 @@
     if (result) {
       const diff = result.caja.diferencia ?? 0
       if (Math.abs(diff) >= 1) {
-        alert(`Caja cerrada. Diferencia: $${money(diff)} ${diff < 0 ? '(faltante)' : '(sobrante)'}`)
+        cierreMsg = `Caja cerrada. Diferencia: $${money(Math.abs(diff))} ${diff < 0 ? '(faltante)' : '(sobrante)'}`
+      } else {
+        cierreMsg = ''
       }
     }
     if (get(workingCaja)?.id === detail.id) workingCaja.set(null)
@@ -174,6 +178,10 @@
       {/if}
     {/each}
   </div>
+
+  {#if cierreMsg}
+    <p class="cierre-msg" role="status">{cierreMsg}</p>
+  {/if}
 </div>
 
 <!-- Modal: abrir caja -->
@@ -273,6 +281,16 @@
     padding: 18px;
     max-width: 1320px;
     margin: 0 auto;
+  }
+  .cierre-msg {
+    margin: 12px 0 0;
+    padding: 10px 14px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    color: #7a5f00;
+    font-weight: 600;
+    font-size: 14px;
   }
   .header {
     display: flex;

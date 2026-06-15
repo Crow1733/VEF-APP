@@ -51,9 +51,18 @@ def listar():
 
 @router.post("")
 def crear(payload: ProductoPayload):
+    if not payload.nombre.strip():
+        raise HTTPException(status_code=422, detail="El nombre del producto no puede estar vacío")
+    if payload.precio_venta < 0:
+        raise HTTPException(status_code=422, detail="El precio de venta no puede ser negativo")
+    if payload.costo < 0:
+        raise HTTPException(status_code=422, detail="El costo no puede ser negativo")
     ganancia = payload.precio_venta - payload.costo
     stock = payload.stock_inicial
     with get_conn() as conn:
+        cat = conn.execute("SELECT id FROM categorias WHERE id=?", (payload.categoria_id,)).fetchone()
+        if not cat:
+            raise HTTPException(status_code=422, detail=f"Categoría id={payload.categoria_id} no existe")
         cur = conn.execute(
             """INSERT INTO productos
                (categoria_id, nombre, codigo, tipo_producto, consignador,
@@ -93,6 +102,9 @@ def actualizar(id: int, payload: ProductoPayload):
 @router.delete("/{id}")
 def eliminar(id: int):
     with get_conn() as conn:
+        row = conn.execute("SELECT id FROM productos WHERE id=?", (id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
         conn.execute("DELETE FROM productos WHERE id=?", (id,))
     return {"ok": True}
 

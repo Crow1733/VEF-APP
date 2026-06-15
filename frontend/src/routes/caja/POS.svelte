@@ -40,6 +40,7 @@
   let payTransfer = $state('0')
   let payTotal = $state(0)
   let payError = $state('')
+  let stockError = $state('')
   // Venta a crédito / libreta (fiado)
   let payCredito = $state(false)
   let creditoCliente = $state('')
@@ -115,6 +116,12 @@
     if (!prod) return
     const qty = normalizeQty(getQty(id))
     const existing = cart.find((item) => item.producto_id === id)
+    const cartQty = existing ? existing.cantidad : 0
+    if (cartQty + qty > prod.stock_actual) {
+      stockError = `Stock insuficiente para "${prod.nombre}": disponible ${prod.stock_actual}, en carrito ${cartQty}.`
+      return
+    }
+    stockError = ''
     if (existing) {
       existing.cantidad += qty
     } else {
@@ -307,6 +314,9 @@
           {/each}
         </select>
       </div>
+      {#if stockError}
+        <p class="payment-error" role="alert" style="margin: 8px 0;">{stockError}</p>
+      {/if}
       <div class="products-grid">
         {#if !filteredProducts.length}
           <div class="empty-state product-empty">
@@ -350,8 +360,8 @@
                   class="btn-primary"
                   type="button"
                   onclick={() => addToCart(p.id)}
-                  disabled={!$workingCaja}
-                  title={!$workingCaja ? "Selecciona una caja en 'Caja actual'" : ''}>Agregar a venta</button
+                  disabled={!$workingCaja || p.stock_actual <= 0}
+                  title={!$workingCaja ? "Selecciona una caja en 'Caja actual'" : p.stock_actual <= 0 ? 'Sin stock' : ''}>Agregar a venta</button
                 >
               </div>
             </article>

@@ -114,6 +114,11 @@ def registrar(payload: VentaPayload):
             if not prod:
                 continue
             cantidad = item.cantidad
+            if prod["stock_actual"] < cantidad:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Stock insuficiente para '{prod['nombre']}': disponible {prod['stock_actual']}, solicitado {cantidad}",
+                )
             precio_unitario = item.precio_unitario if item.precio_unitario is not None else prod["precio_venta"]
             costo_unitario = prod["costo"]
             subtotal = cantidad * precio_unitario

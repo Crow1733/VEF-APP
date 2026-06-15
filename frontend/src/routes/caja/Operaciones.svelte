@@ -28,6 +28,7 @@
   // Modales
   let saleModal = $state<{ venta: Venta; source: Section } | null>(null)
   let cancelId = $state<number | null>(null)
+  let bajaConfirmId = $state<number | null>(null)
 
   // Form extracción
   let wAmount = $state<number | null>(null)
@@ -83,9 +84,10 @@
     await refresh()
   }
 
-  async function deleteBaja(b: Baja) {
-    if (typeof b.id !== 'number') return
-    await api.bajas.eliminar(b.id)
+  async function confirmDeleteBaja() {
+    if (bajaConfirmId == null) return
+    await api.bajas.eliminar(bajaConfirmId)
+    bajaConfirmId = null
     await refresh()
   }
 
@@ -142,7 +144,7 @@
   }
 
   $effect(() => {
-    document.body.classList.toggle('modal-open', !!(saleModal || cancelId != null))
+    document.body.classList.toggle('modal-open', !!(saleModal || cancelId != null || bajaConfirmId != null))
   })
 
   onMount(refresh)
@@ -351,7 +353,7 @@
                     {b.razon}{b.observacion ? ` · ${b.observacion}` : ''}
                   </div>
                   {#if typeof b.id === 'number'}
-                    <button class="btn-outline" type="button" onclick={() => deleteBaja(b)}>Eliminar (restaura stock)</button>
+                    <button class="btn-outline" type="button" onclick={() => (bajaConfirmId = b.id!)}>Eliminar (restaura stock)</button>
                   {/if}
                 </article>
               {/each}
@@ -363,7 +365,7 @@
   </main>
 </div>
 
-<button class="backdrop" class:show={saleModal || cancelId != null} aria-label="Cerrar" onclick={() => { saleModal = null; cancelId = null }}></button>
+<button class="backdrop" class:show={saleModal || cancelId != null || bajaConfirmId != null} aria-label="Cerrar" onclick={() => { saleModal = null; cancelId = null; bajaConfirmId = null }}></button>
 
 <!-- Modal detalle de venta -->
 <div class="modal" class:show={saleModal}>
@@ -408,6 +410,24 @@
       </div>
     </div>
   {/if}
+</div>
+
+<!-- Modal confirmación de eliminación de baja -->
+<div class="modal" class:show={bajaConfirmId != null}>
+  <div class="modal-card big">
+    <div class="modal-body">
+      <div class="confirm-box">
+        <h2>¿Eliminar esta baja?</h2>
+        <p class="muted" style="line-height:1.6;">
+          Se eliminará el registro y se restaurará el stock del producto.
+        </p>
+        <div class="detail-actions" style="margin-top:18px; justify-content:flex-end;">
+          <button class="btn-soft" type="button" onclick={() => (bajaConfirmId = null)}>Cancelar</button>
+          <button class="btn-danger" type="button" onclick={confirmDeleteBaja}>Sí, eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal confirmación de cancelación -->

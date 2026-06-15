@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from database import get_conn
 
@@ -50,6 +50,8 @@ def listar(desde: Optional[str] = None, hasta: Optional[str] = None, tipo: Optio
 
 @router.post("")
 def crear(payload: GastoPayload):
+    if payload.monto <= 0:
+        raise HTTPException(status_code=422, detail="El monto del gasto debe ser mayor que cero")
     tipo = payload.tipo if payload.tipo in TIPOS else "otro"
     with get_conn() as conn:
         if payload.fecha:

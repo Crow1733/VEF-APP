@@ -135,6 +135,7 @@
   let gMonto = $state<number | null>(null)
   let gFecha = $state('')
   let gSocio = $state('')
+  let gError = $state('')
 
   const GASTO_TIPOS = [
     { value: 'salario', label: 'Salario' },
@@ -188,6 +189,7 @@
   let cuadreReserva = $state(20)
   let cierresList = $state<Cierre[]>([])
   let resumen = $state<ResumenCierres | null>(null)
+  let cuadreError = $state('')
 
   // ── Modales ───────────────────────────────────────────────────────────────
   let saleModal = $state<Venta | null>(null)
@@ -255,7 +257,7 @@
     return ventas
       .filter((v) => cajaId === null || v.caja_id === cajaId)
       .filter((v) => {
-        const d = new Date(v.fecha)
+        const d = new Date(v.fecha + 'Z')
         return d >= from && d <= to
       })
   })
@@ -346,7 +348,11 @@
   async function submitGasto(e: SubmitEvent) {
     e.preventDefault()
     const monto = Number(gMonto) || 0
-    if (monto <= 0) return
+    if (monto <= 0) {
+      gError = 'El monto debe ser mayor que cero.'
+      return
+    }
+    gError = ''
     await api.gastos.crear({
       tipo: gTipo,
       concepto: gConcepto.trim(),
@@ -531,9 +537,10 @@
   function cerrarSemana() {
     const { desde, hasta } = getCuadreRange()
     if (!desde || !hasta) {
-      alert('Elige un período con fechas (no "Todo") para cerrar la semana.')
+      cuadreError = 'Elige un período con fechas (no "Todo") para cerrar la semana.'
       return
     }
+    cuadreError = ''
     showConfirm({
       title: 'Cerrar semana',
       text: `Se guardará un cierre del período seleccionado. Utilidad neta: ${formatMoney(cuadre?.utilidad_neta ?? 0)}.`,
@@ -575,11 +582,12 @@
   }
 
   function applyCuadreRange() {
-    if (cuadreFrom && cuadreTo) cuadreRange = { from: cuadreFrom, to: cuadreTo }
+    if (cuadreFrom && cuadreTo) { cuadreRange = { from: cuadreFrom, to: cuadreTo }; cuadreError = '' }
   }
   function setCuadreQuick(f: 'week' | 'month' | 'all') {
     cuadreFilter = f
     cuadreRange = null
+    cuadreError = ''
   }
 
   // Carga el cuadre al entrar a su sub-pestaña o cambiar filtros/parámetros.
@@ -761,7 +769,15 @@
   }
 
   function toggleAllCaja(caja: CajaConfig, marcar: boolean) {
-    saveCajaCats(caja, marcar ? categoriasActivas.map((c) => c.id) : [])
+    showConfirm({
+      title: marcar ? 'Marcar todas las categorías' : 'Quitar todas las categorías',
+      text: marcar
+        ? `Se asignarán todas las categorías del sistema a ${caja.nombre}. ¿Confirmar?`
+        : `Se eliminarán todas las categorías asignadas a ${caja.nombre}. ¿Confirmar?`,
+      okLabel: marcar ? 'Sí, marcar todas' : 'Sí, quitar todas',
+      danger: true,
+      onConfirm: () => saveCajaCats(caja, marcar ? categoriasActivas.map((c) => c.id) : []),
+    })
   }
 
   // ── HISTÓRICO DE CAJAS (solo visible para el administrador) ────────────────
@@ -1099,7 +1115,7 @@
                           <td data-label="ID">#{c.id}</td>
                           <td data-label="Nombre">{c.nombre}</td>
                           <td data-label="Tipo">
-                            {#if c.es_consignacion}<span class="badge hidden">Consignación</span>
+                            {#if c.es_consignacion}<span class="badge visible">Consignación</span>
                             {:else}<span class="badge visible">Propia</span>{/if}
                           </td>
                           <td data-label="Acciones">
@@ -1404,7 +1420,7 @@
                           <tr>
                             <td data-label="Categoría">{r.nombre}</td>
                             <td data-label="Tipo">
-                              {#if r.es_consignacion}<span class="badge hidden">Consignación</span>
+                              {#if r.es_consignacion}<span class="badge visible">Consignación</span>
                               {:else}<span class="badge visible">Propia</span>{/if}
                             </td>
                             <td data-label="Unidades">{r.unidades}</td>
@@ -1432,7 +1448,7 @@
                             <td data-label="Producto">{r.nombre}</td>
                             <td data-label="Categoría">{r.categoria_nombre}</td>
                             <td data-label="Tipo">
-                              {#if r.es_consignacion}<span class="badge hidden">Consignación</span>
+                              {#if r.es_consignacion}<span class="badge visible">Consignación</span>
                               {:else}<span class="badge visible">Propio</span>{/if}
                             </td>
                             <td data-label="Unidades">{r.unidades}</td>
@@ -1468,7 +1484,7 @@
                           <tr>
                             <td data-label="Categoría">{r.nombre}</td>
                             <td data-label="Tipo">
-                              {#if r.es_consignacion}<span class="badge hidden">Consignación</span>
+                              {#if r.es_consignacion}<span class="badge visible">Consignación</span>
                               {:else}<span class="badge visible">Propia</span>{/if}
                             </td>
                             <td data-label="Productos">{r.productos}</td>
@@ -1515,6 +1531,7 @@
                     <label>Concepto<input type="text" bind:value={gConcepto} placeholder="Ej: salario semana" /></label>
                     <label>Monto<input type="number" min="0" step="0.01" bind:value={gMonto} required /></label>
                     <label>Fecha (opcional, hoy si se deja vacío)<input type="date" bind:value={gFecha} /></label>
+                    {#if gError}<p class="form-error">{gError}</p>{/if}
                     <div class="actions-row">
                       <button class="btn primary" type="submit">Guardar gasto</button>
                     </div>
@@ -1729,7 +1746,7 @@
                               <td data-label="Saldo">{formatMoney(c.saldo)}</td>
                               <td data-label="Estado">
                                 {#if c.estado === 'pagada'}<span class="badge visible">Cobrada</span>
-                                {:else}<span class="badge hidden">Activa</span>{/if}
+                                {:else}<span class="badge visible">Activa</span>{/if}
                               </td>
                               <td data-label="Acciones">
                                 <div class="row-actions">
@@ -1784,6 +1801,7 @@
                 </div>
                 <div class="actions-row">
                   <button class="btn primary" type="button" onclick={cerrarSemana}>Cerrar semana (guardar)</button>
+                  {#if cuadreError}<p class="form-error">{cuadreError}</p>{/if}
                 </div>
               </article>
 
