@@ -1056,7 +1056,7 @@
                           <td data-label="Categoría">{p.categoria_nombre}</td>
                           <td data-label="Tipo">
                             {#if p.tipo_producto === 'consignacion'}
-                              <span class="badge hidden">Consignación{p.consignador ? ' · ' + p.consignador : ''}</span>
+                              <span class="badge visible">Consignación{p.consignador ? ' · ' + p.consignador : ''}</span>
                             {:else}<span class="badge visible">Propio</span>{/if}
                           </td>
                           <td data-label="Costo">{formatMoney(p.costo)}</td>
@@ -1084,10 +1084,10 @@
       <!-- CATEGORÍAS -->
       {#if activeTab === 'categorias'}
         <section class="tab-panel active">
-          <div class="panel-grid two-columns">
+          <div class="panel-grid">
             <article class="panel-card">
               <h2>{editingCategoryId ? `Editar categoría #${editingCategoryId}` : 'Crear categoría'}</h2>
-              <form class="form-grid" onsubmit={submitCategory}>
+              <form class="form-grid cat-form-grid" onsubmit={submitCategory}>
                 <label>Nombre<input type="text" bind:value={cName} required /></label>
                 <label class="inline-row">
                   <input type="checkbox" bind:checked={cIsConsignacion} />
@@ -1291,8 +1291,12 @@
                         <div class="muted">
                           {v.items.length} producto(s) · Efectivo {formatMoney(v.subtotal_efectivo)} · Transferencia
                           {formatMoney(v.subtotal_transferencia)}
-                          {#if v.es_consignacion}· <span class="badge hidden">Consignación</span>{/if}
-                          {#if v.estado === 'cancelada'}· <span class="badge hidden">Cancelada</span>{/if}
+                          {#if v.es_consignacion}· <span class="badge visible">Consignación</span>{/if}
+                          {#if v.estado === 'cancelada'}· <span class="badge visible">Cancelada</span>{/if}
+                        </div>
+                        <div class="muted" style="font-size:0.82rem; margin-top:2px;">
+                          {#if v.caja_numero != null}Caja {v.caja_numero}{:else}Sin caja{/if}
+                          {#if v.cajero_nombre} · {v.cajero_nombre}{/if}
                         </div>
                         <div class="row-actions">
                           <button class="btn" onclick={() => (saleModal = v)}>Ver detalles</button>
@@ -1379,11 +1383,6 @@
                     <label>Hasta<input type="date" bind:value={reportTo} /></label>
                     <button class="btn" type="button" onclick={applyReportRange}>Aplicar</button>
                   </div>
-                </div>
-                <div style="margin-top:0.8rem">
-                  <button class="btn export" type="button" onclick={() => api.reportes.exportExcel(reportFrom || null, reportTo || null)}>
-                    Descargar Excel
-                  </button>
                 </div>
               </article>
 
@@ -1692,7 +1691,7 @@
                               <td data-label="Saldo">{formatMoney(c.saldo)}</td>
                               <td data-label="Estado">
                                 {#if c.estado === 'pagada'}<span class="badge visible">Pagada</span>
-                                {:else}<span class="badge hidden">Pendiente</span>{/if}
+                                {:else}<span class="badge visible">Pendiente</span>{/if}
                               </td>
                               <td data-label="Acciones">
                                 <div class="row-actions">
@@ -2044,7 +2043,7 @@
                 <div class="muted">Categoría: {item.categoria_nombre || '-'}</div>
                 <div>Cantidad: {item.cantidad} · Unitario: {formatMoney(item.precio_unitario)}</div>
                 <div>Subtotal: <strong>{formatMoney(item.subtotal)}</strong></div>
-                {#if item.es_consignacion}<span class="badge hidden">Consignación</span>{/if}
+                {#if item.es_consignacion}<span class="badge visible">Consignación</span>{/if}
               </div>
             {/each}
           </div>
@@ -2144,6 +2143,8 @@
 <style>
   .admin {
     min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     background:
       radial-gradient(circle at 12% 10%, var(--bg-accent-1), transparent 42%),
       radial-gradient(circle at 90% 0%, var(--bg-accent-2), transparent 36%),
@@ -2238,13 +2239,6 @@
     color: #ffffff;
     border-color: transparent;
   }
-  .btn.export {
-    background: linear-gradient(135deg, #059669, #047857);
-    color: #ffffff;
-    border-color: transparent;
-    padding: 0.5rem 1.2rem;
-    font-weight: 600;
-  }
   .btn:focus-visible,
   .tab-button:focus-visible,
   .sub-tab-button:focus-visible,
@@ -2256,6 +2250,7 @@
 
   .main-content {
     padding: 16px;
+    flex: 1;
   }
   .tab-panel.active {
     display: block;
@@ -2268,9 +2263,21 @@
   }
   .panel-grid.two-columns {
     grid-template-columns: 1fr 1.3fr;
+    /* header ~62px + tabs ~57px + padding 32px + gap 14px = ~165px */
+    height: calc(100vh - 165px);
   }
   .panel-grid.single-column {
     grid-template-columns: 1fr;
+  }
+  /* Categorías: columna única con altura fija, formulario arriba + lista abajo */
+  .panel-grid:not(.two-columns):not(.single-column) {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 165px);
+  }
+  .cat-form-grid {
+    flex: none;
+    overflow-y: visible;
   }
 
   .panel-card {
@@ -2279,12 +2286,13 @@
     border-radius: 18px;
     padding: 12px;
     box-shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
-    transition:
-      transform var(--duration-base) var(--ease-smooth),
-      box-shadow var(--duration-base) var(--ease-smooth);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    transition: box-shadow var(--duration-base) var(--ease-smooth);
   }
   .panel-card:hover {
-    transform: translateY(-2px);
     box-shadow: 0 22px 40px rgba(15, 23, 42, 0.12);
   }
   .panel-card h2 {
@@ -2310,6 +2318,11 @@
   .form-grid {
     display: grid;
     gap: 8px;
+    align-content: start;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
   }
   .form-grid label {
     display: grid;
@@ -2491,6 +2504,8 @@
     border-radius: 14px;
     border: 1px solid var(--border);
     background: var(--surface);
+    flex: 1;
+    min-height: 0;
   }
   .product-filters {
     grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
@@ -2763,8 +2778,23 @@
   }
 
   @media (max-width: 980px) {
-    .panel-grid.two-columns {
+    .panel-grid.two-columns,
+    .panel-grid:not(.two-columns):not(.single-column) {
       grid-template-columns: 1fr;
+      grid-template-rows: none;
+      height: auto;
+    }
+    .panel-card {
+      overflow: visible;
+    }
+    .form-grid {
+      flex: none;
+      overflow-y: visible;
+    }
+    .table-wrap {
+      flex: none;
+      overflow: auto;
+      max-height: 420px;
     }
     table {
       min-width: 760px;
@@ -2942,6 +2972,24 @@
     .modal-head {
       flex-direction: column;
       align-items: flex-start;
+    }
+    /* Mobile: todo scrollea naturalmente */
+    .panel-grid.two-columns,
+    .panel-grid:not(.two-columns):not(.single-column) {
+      height: auto;
+      grid-template-rows: none;
+    }
+    .panel-card {
+      overflow: visible;
+    }
+    .form-grid {
+      flex: none;
+      overflow-y: visible;
+    }
+    .table-wrap {
+      flex: none;
+      overflow: auto;
+      max-height: 350px;
     }
   }
 

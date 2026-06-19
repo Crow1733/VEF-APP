@@ -225,6 +225,7 @@
         <div class="desglose-grid">
           <div class="desglose-card"><div class="label">Efectivo inicial</div><div class="value">${money(desglose.efectivo_inicial)}</div></div>
           <div class="desglose-card entry"><div class="label">+ Ventas efectivo</div><div class="value">${money(desglose.ventas_efectivo)}</div></div>
+          <div class="desglose-card entry"><div class="label">+ Ingresos (cobros)</div><div class="value">${money(desglose.ingresos)}</div></div>
           <div class="desglose-card"><div class="label">Ventas transferencia</div><div class="value">${money(desglose.ventas_transferencia)}</div></div>
           <div class="desglose-card exit"><div class="label">− Extracciones</div><div class="value">${money(desglose.extracciones)}</div></div>
           <div class="desglose-card exit"><div class="label">− Compras mercancía</div><div class="value">${money(desglose.compras_mercancia)}</div></div>

@@ -44,6 +44,13 @@ def _detalle_venta(conn, venta_id: int) -> dict:
     ).fetchall()
     result = dict(venta)
     result["items"] = [dict(r) for r in items_rows]
+    if result.get("caja_id"):
+        caja_row = conn.execute(
+            "SELECT numero FROM cajas WHERE id=?", (result["caja_id"],)
+        ).fetchone()
+        result["caja_numero"] = caja_row["numero"] if caja_row else result["caja_id"]
+    else:
+        result["caja_numero"] = None
     return result
 
 
@@ -177,4 +184,10 @@ def cancelar(id: int):
                 "UPDATE productos SET stock_actual=stock_actual+? WHERE id=?",
                 (item["cantidad"], item["producto_id"]),
             )
+        # Revertir el movimiento de efectivo asociado: si no, el historial de
+        # movimientos de la caja seguiría mostrando una entrada de una venta anulada.
+        conn.execute(
+            "DELETE FROM movimientos_caja WHERE relacionado_tipo='venta' AND relacionado_id=?",
+            (id,),
+        )
         return _detalle_venta(conn, id)

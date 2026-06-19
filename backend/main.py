@@ -1,7 +1,6 @@
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db, migrate
@@ -33,12 +32,9 @@ app.include_router(cierres.router)
 app.include_router(bajas.router)
 app.include_router(creditos.router)
 
-# Sirve el build de Vite (frontend/dist) si existe; si no, el front/ antiguo.
-# El routing del SPA es por hash (#/...), así que StaticFiles(html=True) basta:
-# todas las rutas de cliente resuelven sobre index.html sin fallback de servidor.
-_DIST = Path(__file__).parent.parent / "frontend" / "dist"
-_LEGACY = Path(__file__).parent.parent / "front"
-FRONT = _DIST if _DIST.exists() else _LEGACY
+# Sirve el build de Vite (frontend/dist). El routing del SPA es por hash (#/...),
+# así que StaticFiles(html=True) basta: todas las rutas resuelven sobre index.html.
+FRONT = Path(__file__).parent.parent / "frontend" / "dist"
 app.mount("/", StaticFiles(directory=str(FRONT), html=True), name="front")
 
 

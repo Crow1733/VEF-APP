@@ -570,6 +570,7 @@ export interface Desglose {
   efectivo_inicial: number
   ventas_efectivo: number
   ventas_transferencia: number
+  ingresos: number
   extracciones: number
   compras_mercancia: number
   pagos_varios: number

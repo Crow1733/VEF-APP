@@ -256,12 +256,23 @@ def _desglose(conn, caja_id: int) -> dict:
         "WHERE caja_id=? AND tipo_movimiento='pago' AND es_extraccion=0 AND es_compra_mercancia=0",
         (caja_id,),
     ).fetchone()[0]
-    efectivo_esperado = efectivo_inicial + ventas_efectivo - extracciones - compras_mercancia - pagos_varios
+    # Ingresos en efectivo que no son ventas (p.ej. cobros de crédito/libreta).
+    # Entran físicamente al cajón, así que suman al efectivo esperado.
+    ingresos = conn.execute(
+        "SELECT COALESCE(SUM(monto),0) FROM movimientos_caja "
+        "WHERE caja_id=? AND tipo_movimiento='ingreso'",
+        (caja_id,),
+    ).fetchone()[0]
+    efectivo_esperado = (
+        efectivo_inicial + ventas_efectivo + ingresos
+        - extracciones - compras_mercancia - pagos_varios
+    )
     return {
         "caja_id": caja_id,
         "efectivo_inicial": efectivo_inicial,
         "ventas_efectivo": ventas_efectivo,
         "ventas_transferencia": ventas_transferencia,
+        "ingresos": ingresos,
         "extracciones": extracciones,
         "compras_mercancia": compras_mercancia,
         "pagos_varios": pagos_varios,

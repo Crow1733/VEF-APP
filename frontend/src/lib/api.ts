@@ -371,18 +371,6 @@ const reportes = {
       '/reportes/cobro-diario?' + qs,
     )
   },
-  exportExcel: (desde?: string | null, hasta?: string | null) => {
-    const qs = new URLSearchParams()
-    if (desde) qs.set('desde', desde)
-    if (hasta) qs.set('hasta', hasta)
-    const url = BASE + '/reportes/export-excel?' + qs
-    const a = document.createElement('a')
-    a.href = url
-    a.download = ''
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-  },
 }
 
 // ── Gastos ───────────────────────────────────────────────────────────────────

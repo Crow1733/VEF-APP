@@ -9,6 +9,15 @@ node_modules/
 frontend/dist/
 frontend/dev-dist/
 
+# Base de datos (contiene datos reales del negocio)
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+
+# SSL / certificados
+ssl/
+
 # Logs / temporales
 *.log
 .DS_Store
+/tmp/

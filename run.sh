@@ -6,6 +6,5 @@ cd "$SCRIPT_DIR/backend"
 exec ../../.venv/bin/uvicorn main:app \
     --host 0.0.0.0 \
     --port 8765 \
-    --reload \
     --ssl-keyfile "$SCRIPT_DIR/ssl/key.pem" \
     --ssl-certfile "$SCRIPT_DIR/ssl/cert.pem"
