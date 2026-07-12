@@ -63,9 +63,10 @@ Ok "Node $(node --version)"
 Info "Creando entorno virtual e instalando dependencias del backend..."
 if (-not (Test-Path $Venv)) { python -m venv $Venv }
 $Py  = Join-Path $Venv "Scripts\python.exe"
+$PipOpts = @("--retries", "15", "--default-timeout", "180")   # tolerancia a redes lentas
 & $Py -m pip install --upgrade pip | Out-Null
-& $Py -m pip install -r (Join-Path $Backend "requirements.txt")
-& $Py -m pip install cryptography   # para generar el certificado SSL
+& $Py -m pip install @PipOpts -r (Join-Path $Backend "requirements.txt")
+& $Py -m pip install @PipOpts cryptography   # para generar el certificado SSL
 Ok "Backend listo."
 
 # --- 3. Frontend: build -----------------------------------------------------
