@@ -7,7 +7,28 @@ from pathlib import Path
 import openpyxl
 from database import get_conn, init_db
 
-EXCEL_PATH = Path(__file__).parent.parent / "Exel" / "19.1-SEMANA del 11 al 16 de mayo.xlsx"
+
+def find_excel() -> Path:
+    """Localiza el Excel a importar. Se puede pasar la ruta como primer argumento;
+    si no, busca el .xlsx más reciente en la raíz del proyecto o en Exel/."""
+    if len(sys.argv) > 1:
+        p = Path(sys.argv[1])
+        if not p.exists():
+            raise FileNotFoundError(f"No existe el archivo: {p}")
+        return p
+    root = Path(__file__).parent.parent
+    candidatos = [
+        x for x in list(root.glob("*.xlsx")) + list((root / "Exel").glob("*.xlsx"))
+        if not x.name.startswith("~$")   # ignora archivos temporales de Excel
+    ]
+    if not candidatos:
+        raise FileNotFoundError(
+            "No se encontró ningún .xlsx en la raíz del proyecto ni en Exel/"
+        )
+    return max(candidatos, key=lambda p: p.stat().st_mtime)  # el más reciente
+
+
+EXCEL_PATH = find_excel()
 
 # ─── Mapeo hoja → (categoría_nombre, tipo, consignador) ──────────────────────
 HOJAS = {
