@@ -1266,6 +1266,12 @@
       flex-direction: column;
       align-items: flex-start;
     }
+    /* En móvil el encabezado no debe quedar fijo: si no, el buscador flota
+       superpuesto sobre los productos al hacer scroll. Que fluya normal,
+       con el buscador debajo del título "Productos disponibles". */
+    .products-panel .panel-header {
+      position: static;
+    }
     /* .cart-line es grid: se apila cambiando a una columna, no con flex-direction. */
     .cart-line {
       grid-template-columns: 1fr;
@@ -1285,9 +1291,11 @@
     .search-box {
       width: 100%;
       justify-content: stretch;
+      margin-top: 8px;
     }
     .search-input {
       width: 100%;
+      max-width: none;
     }
     .order-panel {
       left: 10px;

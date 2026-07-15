@@ -68,13 +68,14 @@
   let reportRange = $state<{ from: string; to: string } | null>(null)
 
   let productFilters = $state<{
+    search: string
     category: string
     tipo: string
     priceMin: number | null
     priceMax: number | null
     stockMin: number | null
     stockMax: number | null
-  }>({ category: 'all', tipo: 'all', priceMin: null, priceMax: null, stockMin: null, stockMax: null })
+  }>({ search: '', category: 'all', tipo: 'all', priceMin: null, priceMax: null, stockMin: null, stockMax: null })
   let productFormVisible = $state(true)
 
   // Fechas (inputs de rango)
@@ -103,9 +104,14 @@
   let pSale = $state<number | null>(null)
   let pUnit = $state('unidad')
   let pStock = $state<number | null>(null)
+  let pEntrada = $state<number | null>(null)
+  let pBaja = $state<number | null>(null)
   let pImageData = $state('')
   let fileInput = $state<HTMLInputElement | undefined>(undefined)
   const profit = $derived(formatMoney((Number(pSale) || 0) - (Number(pCost) || 0)))
+  const editingStockActual = $derived(
+    editingProductId ? (productos.find((p) => p.id === editingProductId)?.stock_actual ?? 0) : 0,
+  )
 
   // ── Formulario de categoría ────────────────────────────────────────────
   let editingCategoryId = $state<number | null>(null)
@@ -209,8 +215,14 @@
 
   const filteredProducts = $derived.by(() => {
     const f = productFilters
+    const q = f.search.trim().toLowerCase()
     return productos
       .filter((p) => {
+        if (q) {
+          const enNombre = p.nombre.toLowerCase().includes(q)
+          const enCodigo = (p.codigo || '').toLowerCase().includes(q)
+          if (!enNombre && !enCodigo) return false
+        }
         if (f.category !== 'all' && String(p.categoria_id) !== String(f.category)) return false
         if (f.tipo !== 'all' && p.tipo_producto !== f.tipo) return false
         if (f.priceMin != null && p.precio_venta < f.priceMin) return false
@@ -620,6 +632,8 @@
     pSale = null
     pUnit = 'unidad'
     pStock = null
+    pEntrada = null
+    pBaja = null
     pImageData = ''
     if (fileInput) fileInput.value = ''
   }
@@ -650,16 +664,34 @@
       costo: Number(pCost) || 0,
       precio_venta: Number(pSale) || 0,
       unidad: pUnit.trim() || 'unidad',
-      stock_inicial: Number(pStock) || 0,
       imagen: pImageData,
     }
     if (editingProductId) {
-      await api.productos.actualizar(editingProductId, {
-        ...payload,
-        stock_actual: payload.stock_inicial,
-      })
+      const id = editingProductId
+      // 1. Datos descriptivos (el backend NO toca el stock al editar).
+      await api.productos.actualizar(id, payload)
+      // 2. Entrada: suma al stock actual y queda registrada (no descuenta caja).
+      const entrada = Number(pEntrada) || 0
+      if (entrada > 0) {
+        await api.compras.registrar({
+          items: [{ producto_id: id, cantidad: entrada, costo_unitario: Number(pCost) || 0 }],
+          descuenta_fondo: false,
+          observacion: 'Entrada desde edición de producto',
+        })
+      }
+      // 3. Baja: descuenta del stock actual y queda registrada. Las ventas ya
+      //    realizadas no se tocan (viven en venta_detalle).
+      const baja = Number(pBaja) || 0
+      if (baja > 0) {
+        await api.bajas.registrar({
+          producto_id: id,
+          cantidad: baja,
+          razon: 'otro',
+          observacion: 'Baja desde edición de producto',
+        })
+      }
     } else {
-      await api.productos.crear(payload)
+      await api.productos.crear({ ...payload, stock_inicial: Number(pStock) || 0 })
     }
     await refreshCache()
     resetProductForm()
@@ -678,6 +710,8 @@
     pSale = p.precio_venta
     pUnit = p.unidad || 'unidad'
     pStock = p.stock_actual
+    pEntrada = null
+    pBaja = null
     pImageData = p.imagen || ''
     if (fileInput) fileInput.value = ''
     productFormVisible = true
@@ -701,6 +735,7 @@
 
   function resetProductFilters() {
     productFilters = {
+      search: '',
       category: 'all',
       tipo: 'all',
       priceMin: null,
@@ -976,7 +1011,13 @@
                 <label>Precio de venta<input type="number" min="0" step="0.01" bind:value={pSale} required /></label>
                 <label>Ganancia calculada<input type="text" value={profit} readonly /></label>
                 <label>Unidad<input type="text" bind:value={pUnit} /></label>
-                <label>Stock inicial<input type="number" min="0" step="1" bind:value={pStock} required /></label>
+                {#if editingProductId}
+                  <label>Stock actual<input type="number" value={editingStockActual} readonly /></label>
+                  <label>Entrada (sumar al stock)<input type="number" min="0" step="1" placeholder="0" bind:value={pEntrada} /></label>
+                  <label>Baja (restar del stock)<input type="number" min="0" step="1" placeholder="0" bind:value={pBaja} /></label>
+                {:else}
+                  <label>Stock inicial<input type="number" min="0" step="1" bind:value={pStock} required /></label>
+                {/if}
                 <label>
                   Foto (opcional)
                   <input type="file" accept="image/*" bind:this={fileInput} onchange={onProductFile} />
@@ -1003,6 +1044,14 @@
                 >
               </div>
               <div class="filters-grid product-filters">
+                <label class="search-filter">
+                  Buscar por nombre o código
+                  <input
+                    type="search"
+                    placeholder="Escribe para buscar…"
+                    bind:value={productFilters.search}
+                  />
+                </label>
                 <label>
                   Categoría
                   <select bind:value={productFilters.category}>
@@ -2516,6 +2565,9 @@
     width: 100%;
     font-size: 12px;
     gap: 4px;
+  }
+  .product-filters .search-filter {
+    grid-column: 1 / -1;
   }
   .product-filters input,
   .product-filters select {

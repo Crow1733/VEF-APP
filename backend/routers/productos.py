@@ -84,16 +84,17 @@ def actualizar(id: int, payload: ProductoPayload):
         if not prev:
             raise HTTPException(status_code=404, detail="Producto no encontrado")
         ganancia = payload.precio_venta - payload.costo
-        stock_actual = payload.stock_actual if payload.stock_actual is not None else payload.stock_inicial
+        # El stock (actual e inicial) NO se modifica al editar un producto: solo
+        # cambia mediante ventas, entradas (compras) y bajas. Así una edición nunca
+        # pisa el stock real que las ventas ya fueron descontando.
         conn.execute(
             """UPDATE productos SET categoria_id=?, nombre=?, codigo=?, tipo_producto=?,
                consignador=?, costo=?, precio_venta=?, ganancia=?, unidad=?,
-               stock_inicial=?, stock_actual=?, imagen=?, activa=? WHERE id=?""",
+               imagen=?, activa=? WHERE id=?""",
             (payload.categoria_id, payload.nombre, payload.codigo,
              payload.tipo_producto, payload.consignador,
              payload.costo, payload.precio_venta, ganancia,
-             payload.unidad, payload.stock_inicial, stock_actual,
-             payload.imagen, payload.activa, id),
+             payload.unidad, payload.imagen, payload.activa, id),
         )
         row = conn.execute("SELECT * FROM productos WHERE id=?", (id,)).fetchone()
         return enriquecer(row, conn)
