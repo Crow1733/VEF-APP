@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import { guard, logout } from '../lib/auth'
   import { api } from '../lib/api'
   import {
@@ -197,6 +197,10 @@
   let resumen = $state<ResumenCierres | null>(null)
   let cuadreError = $state('')
 
+  // ── Resumen de ventas del día (mismo cálculo que el cuadre, rango = hoy) ─────
+  let resumenDiario = $state<CuadreReporte | null>(null)
+  let resumenDiarioInterval: ReturnType<typeof setInterval> | null = null
+
   // ── Modales ───────────────────────────────────────────────────────────────
   let saleModal = $state<Venta | null>(null)
   let confirmBox = $state<{
@@ -267,7 +271,7 @@
     const { from, to } = getSalesDateRange()
     const cajaId = getCajaFilter('ventas')
     return ventas
-      .filter((v) => cajaId === null || v.caja_id === cajaId)
+      .filter((v) => cajaId === null || v.caja_numero === cajaId)
       .filter((v) => {
         const d = new Date(v.fecha + 'Z')
         return d >= from && d <= to
@@ -914,6 +918,42 @@
     customRange = { from: fromDate, to: toDate }
     // El resaltado de los botones rápidos se apaga vía `!customRange`.
   }
+
+  // Rango del día de HOY (hora local) expresado en UTC "YYYY-MM-DD HH:MM:SS",
+  // que es el formato en que se guardan las fechas de las ventas.
+  function rangoHoyUTC(): { desde: string; hasta: string } {
+    const now = new Date()
+    const ini = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+    const fin = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+    const fmt = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ')
+    return { desde: fmt(ini), hasta: fmt(fin) }
+  }
+
+  async function loadResumenDiario() {
+    const { desde, hasta } = rangoHoyUTC()
+    try {
+      resumenDiario = await api.reportes.cuadre(desde, hasta, cuadreSocios, cuadreReserva)
+    } catch {
+      // Silencioso: es un panel informativo que se reintenta solo.
+    }
+  }
+
+  function deleteSale(v: Venta) {
+    showConfirm({
+      title: `Eliminar venta #${v.id}`,
+      text:
+        `Se eliminará la venta #${v.id} (${formatMoney(v.total)}) de forma permanente y ` +
+        `se devolverá el stock de sus productos al inventario. Esta acción no se puede deshacer.`,
+      okLabel: 'Sí, eliminar',
+      danger: true,
+      onConfirm: async () => {
+        await api.ventas.eliminar(Number(v.id))
+        saleModal = null
+        await refreshCache()
+        await loadResumenDiario()
+      },
+    })
+  }
   function setQuickFilter(f: 'today' | 'week' | 'month') {
     activeFilter = f
     customRange = null
@@ -954,6 +994,14 @@
     productFormVisible = !window.matchMedia('(max-width: 760px)').matches
     await refreshCache()
     ready = true
+    // Resumen del día en tiempo real: carga inicial + refresco cada 30 s.
+    // Al cambiar el día, el rango es "hoy" y el resumen arranca de nuevo en 0.
+    await loadResumenDiario()
+    resumenDiarioInterval = setInterval(loadResumenDiario, 30000)
+  })
+
+  onDestroy(() => {
+    if (resumenDiarioInterval) clearInterval(resumenDiarioInterval)
   })
 </script>
 
@@ -1292,6 +1340,33 @@
                   Cada venta incluye desglose entre efectivo y transferencia. Las marcadas
                   <em>Consignación</em> no suman al total propio.
                 </p>
+
+                {#if resumenDiario}
+                  <div class="daily-summary">
+                    <div class="daily-summary-head">
+                      <strong>Resumen de hoy</strong>
+                      <span class="muted">En tiempo real · reinicia cada día</span>
+                    </div>
+                    <div class="daily-summary-grid">
+                      <div class="ds-item">
+                        <div class="ds-label">Venta total</div>
+                        <div class="ds-value">{formatMoney(resumenDiario.venta_total)}</div>
+                      </div>
+                      <div class="ds-item">
+                        <div class="ds-label">Efectivo</div>
+                        <div class="ds-value">{formatMoney(resumenDiario.efectivo)}</div>
+                      </div>
+                      <div class="ds-item">
+                        <div class="ds-label">Transferencia</div>
+                        <div class="ds-value">{formatMoney(resumenDiario.transferencia)}</div>
+                      </div>
+                      <div class="ds-item">
+                        <div class="ds-label">Utilidad bruta</div>
+                        <div class="ds-value">{formatMoney(resumenDiario.utilidad_bruta)}</div>
+                      </div>
+                    </div>
+                  </div>
+                {/if}
                 <fieldset class="cajas-filter">
                   <legend>Cajas</legend>
                   {#each ['all', 1, 2, 3] as c (c)}
@@ -1349,6 +1424,7 @@
                         </div>
                         <div class="row-actions">
                           <button class="btn" onclick={() => (saleModal = v)}>Ver detalles</button>
+                          <button class="btn danger" onclick={() => deleteSale(v)}>Eliminar</button>
                         </div>
                       </div>
                     {/each}
@@ -2095,6 +2171,9 @@
                 {#if item.es_consignacion}<span class="badge visible">Consignación</span>{/if}
               </div>
             {/each}
+            <div class="row-actions" style="margin-top:12px;">
+              <button class="btn danger" onclick={() => saleModal && deleteSale(saleModal)}>Eliminar venta</button>
+            </div>
           </div>
         </div>
       </div>
@@ -2652,6 +2731,51 @@
   }
   .date-range label {
     min-width: 140px;
+  }
+
+  .daily-summary {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-strong);
+    padding: 14px 16px;
+    margin: 12px 0 16px;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  }
+  .daily-summary-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .daily-summary-head strong {
+    font-family: var(--font-display);
+    font-size: 17px;
+  }
+  .daily-summary-head .muted {
+    font-size: 12px;
+  }
+  .daily-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+  }
+  .ds-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .ds-label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .ds-value {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: var(--font-display);
   }
 
   .sales-list {

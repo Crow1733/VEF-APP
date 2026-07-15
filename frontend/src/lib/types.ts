@@ -112,6 +112,7 @@ export interface VentaDetalle {
 export interface Venta {
   id: number | string
   caja_id: number | null
+  caja_numero?: number | null
   fecha: string
   tipo_pago: string
   total: number
@@ -121,6 +122,8 @@ export interface Venta {
   estado: 'completada' | 'cancelada'
   cancelada_en: string | null
   observacion: string
+  cajero_id?: number | null
+  cajero_nombre?: string | null
   items: VentaDetalle[]
   _offline?: boolean
 }

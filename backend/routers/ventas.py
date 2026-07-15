@@ -191,3 +191,28 @@ def cancelar(id: int):
             (id,),
         )
         return _detalle_venta(conn, id)
+
+
+@router.delete("/{id}")
+def eliminar(id: int):
+    """Elimina una venta por completo (acción del administrador). Restaura el stock
+    vendido, borra el detalle y el movimiento de efectivo asociado. Si la venta ya
+    estaba cancelada, NO restaura stock de nuevo (la cancelación ya lo había devuelto)."""
+    with get_conn() as conn:
+        venta = conn.execute("SELECT * FROM ventas WHERE id=?", (id,)).fetchone()
+        if not venta:
+            raise HTTPException(status_code=404, detail="Venta no encontrada")
+        items = conn.execute("SELECT * FROM venta_detalle WHERE venta_id=?", (id,)).fetchall()
+        if venta["estado"] != "cancelada":
+            for item in items:
+                conn.execute(
+                    "UPDATE productos SET stock_actual=stock_actual+? WHERE id=?",
+                    (item["cantidad"], item["producto_id"]),
+                )
+        conn.execute("DELETE FROM venta_detalle WHERE venta_id=?", (id,))
+        conn.execute(
+            "DELETE FROM movimientos_caja WHERE relacionado_tipo='venta' AND relacionado_id=?",
+            (id,),
+        )
+        conn.execute("DELETE FROM ventas WHERE id=?", (id,))
+    return {"ok": True}

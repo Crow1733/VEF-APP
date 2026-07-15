@@ -258,6 +258,7 @@ const ventas = {
     }
   },
   cancelar: (id: number) => netPost<Venta>(`/ventas/${id}/cancelar`),
+  eliminar: (id: number) => netDel<{ ok: boolean }>(`/ventas/${id}`),
 }
 
 async function _ventaOffline(payload: VentaPayload): Promise<Venta> {
