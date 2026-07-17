@@ -113,6 +113,9 @@
   const editingStockActual = $derived(
     editingProductId ? (productos.find((p) => p.id === editingProductId)?.stock_actual ?? 0) : 0,
   )
+  const editingStockInicial = $derived(
+    editingProductId ? (productos.find((p) => p.id === editingProductId)?.stock_inicial ?? 0) : 0,
+  )
 
   // ── Formulario de categoría ────────────────────────────────────────────
   let editingCategoryId = $state<number | null>(null)
@@ -1083,9 +1086,10 @@
                 <label>Ganancia calculada<input type="text" value={profit} readonly /></label>
                 <label>Unidad<input type="text" bind:value={pUnit} /></label>
                 {#if editingProductId}
-                  <label>Stock actual<input type="number" value={editingStockActual} readonly /></label>
-                  <label>Entrada (sumar al stock)<input type="number" min="0" step="1" placeholder="0" bind:value={pEntrada} /></label>
-                  <label>Baja (restar del stock)<input type="number" min="0" step="1" placeholder="0" bind:value={pBaja} /></label>
+                  <label>Stock inicial (fijo)<input type="number" value={editingStockInicial} readonly /></label>
+                  <label>Total actual<input type="number" value={editingStockActual} readonly /></label>
+                  <label>Entrada (sumar al total)<input type="number" min="0" step="1" placeholder="0" bind:value={pEntrada} /></label>
+                  <label>Baja (restar del total)<input type="number" min="0" step="1" placeholder="0" bind:value={pBaja} /></label>
                 {:else}
                   <label>Stock inicial<input type="number" min="0" step="1" bind:value={pStock} required /></label>
                 {/if}
@@ -1153,14 +1157,14 @@
                   <thead>
                     <tr>
                       <th>ID</th><th>Foto</th><th>Código</th><th>Nombre</th><th>Categoría</th>
-                      <th>Tipo</th><th>Costo</th><th>Venta</th><th>Ganancia</th><th>Stock</th>
+                      <th>Tipo</th><th>Costo</th><th>Venta</th><th>Ganancia</th><th>Inicial</th><th>Total</th>
                       <th>Vendidos</th><th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {#if !filteredProducts.length}
                       <tr class="table-empty-row"
-                        ><td colspan="12"><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr
+                        ><td colspan="13"><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr
                       >
                     {:else}
                       {#each filteredProducts as p (p.id)}
@@ -1182,7 +1186,8 @@
                           <td data-label="Costo">{formatMoney(p.costo)}</td>
                           <td data-label="Venta">{formatMoney(p.precio_venta)}</td>
                           <td data-label="Ganancia">{formatMoney(p.ganancia)}</td>
-                          <td data-label="Stock">{p.stock_actual}</td>
+                          <td data-label="Inicial">{p.stock_inicial}</td>
+                          <td data-label="Total">{p.stock_actual}</td>
                           <td data-label="Vendidos">{p.vendidos}</td>
                           <td data-label="Acciones">
                             <div class="row-actions">
