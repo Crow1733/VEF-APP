@@ -431,6 +431,8 @@ export interface CuadreReporte {
   venta_total: number
   efectivo: number
   transferencia: number
+  venta_propia: number
+  venta_consignacion: number
   perdida_ganancia: number
   venta_real: number
   venta_costo: number
@@ -460,6 +462,17 @@ export interface CuadreReporte {
   consignadores_a_pagar: number
   faltante_sobrante: number
   efectivo_caja: number
+}
+
+// ── Ventas agrupadas por día (historial diario accesible por el admin) ────────
+export interface VentaPorDia {
+  dia: string
+  num_ventas: number
+  venta_total: number
+  efectivo: number
+  transferencia: number
+  venta_propia: number
+  venta_consignacion: number
 }
 
 // ── Cierre semanal persistido (Capa 6b) ──────────────────────────────────────

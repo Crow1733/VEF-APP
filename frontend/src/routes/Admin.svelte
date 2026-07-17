@@ -29,6 +29,7 @@
     ResumenCierres,
     Usuario,
     Venta,
+    VentaPorDia,
   } from '../lib/types'
 
   type MainTab = 'productos' | 'categorias' | 'caja' | 'economia' | 'usuarios'
@@ -276,6 +277,28 @@
         const d = new Date(v.fecha + 'Z')
         return d >= from && d <= to
       })
+  })
+
+  // Ventas agrupadas por día (mismo filtro de caja y rango que la lista). El
+  // total incluye la consignación y se desglosa. Es el registro histórico diario.
+  const ventasPorDia = $derived.by(() => {
+    const map = new Map<string, VentaPorDia>()
+    for (const v of filteredSales) {
+      if (v.estado === 'cancelada') continue
+      const dia = v.fecha.slice(0, 10)
+      let e = map.get(dia)
+      if (!e) {
+        e = { dia, num_ventas: 0, venta_total: 0, efectivo: 0, transferencia: 0, venta_propia: 0, venta_consignacion: 0 }
+        map.set(dia, e)
+      }
+      e.num_ventas += 1
+      e.venta_total += v.total
+      e.efectivo += v.subtotal_efectivo
+      e.transferencia += v.subtotal_transferencia
+      if (v.es_consignacion) e.venta_consignacion += v.total
+      else e.venta_propia += v.total
+    }
+    return [...map.values()].sort((a, b) => b.dia.localeCompare(a.dia))
   })
 
   const filteredExtracciones = $derived.by(() => {
@@ -1349,8 +1372,16 @@
                     </div>
                     <div class="daily-summary-grid">
                       <div class="ds-item">
-                        <div class="ds-label">Venta total</div>
+                        <div class="ds-label">Venta total (incluye consignación)</div>
                         <div class="ds-value">{formatMoney(resumenDiario.venta_total)}</div>
+                      </div>
+                      <div class="ds-item">
+                        <div class="ds-label">· Propia</div>
+                        <div class="ds-value">{formatMoney(resumenDiario.venta_propia)}</div>
+                      </div>
+                      <div class="ds-item">
+                        <div class="ds-label">· Consignación</div>
+                        <div class="ds-value">{formatMoney(resumenDiario.venta_consignacion)}</div>
                       </div>
                       <div class="ds-item">
                         <div class="ds-label">Efectivo</div>
@@ -1396,6 +1427,40 @@
                     <button class="btn" type="button" onclick={applyCustomRange}>Aplicar rango</button>
                   </div>
                 </div>
+
+                <h3 class="daily-history-title">Historial por día</h3>
+                <p class="muted" style="margin:0 0 8px;">
+                  Ventas guardadas por día (respeta el filtro de caja y el rango elegido). El total
+                  incluye la consignación y se desglosa.
+                </p>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Día</th><th># Ventas</th><th>Total</th><th>Efectivo</th>
+                        <th>Transferencia</th><th>Propia</th><th>Consignación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#if !ventasPorDia.length}
+                        <tr class="table-empty-row"><td colspan="7"><div class="empty-state">No hay ventas en este rango.</div></td></tr>
+                      {:else}
+                        {#each ventasPorDia as d (d.dia)}
+                          <tr>
+                            <td data-label="Día">{formatDate(d.dia + ' 00:00:00')}</td>
+                            <td data-label="# Ventas">{d.num_ventas}</td>
+                            <td data-label="Total"><strong>{formatMoney(d.venta_total)}</strong></td>
+                            <td data-label="Efectivo">{formatMoney(d.efectivo)}</td>
+                            <td data-label="Transferencia">{formatMoney(d.transferencia)}</td>
+                            <td data-label="Propia">{formatMoney(d.venta_propia)}</td>
+                            <td data-label="Consignación">{formatMoney(d.venta_consignacion)}</td>
+                          </tr>
+                        {/each}
+                      {/if}
+                    </tbody>
+                  </table>
+                </div>
+
                 <div class="sales-list">
                   {#if !filteredSales.length}
                     <div class="empty-state">No hay ventas en este rango.</div>
@@ -1934,7 +1999,11 @@
                   <h2>Resultado</h2>
                   <div class="report-card">
                     <div class="report-meta">
-                      <span>Venta total: <strong>{formatMoney(cuadre.venta_total)}</strong></span>
+                      <span>Venta total (incl. consignación): <strong>{formatMoney(cuadre.venta_total)}</strong></span>
+                      <span>· Propia: <strong>{formatMoney(cuadre.venta_propia)}</strong></span>
+                      <span>· Consignación: <strong>{formatMoney(cuadre.venta_consignacion)}</strong></span>
+                    </div>
+                    <div class="report-meta">
                       <span>Efectivo: <strong>{formatMoney(cuadre.efectivo)}</strong></span>
                       <span>Transferencia: <strong>{formatMoney(cuadre.transferencia)}</strong></span>
                     </div>

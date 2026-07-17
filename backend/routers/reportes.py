@@ -167,6 +167,12 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         venta_total = sv("SUM(total)")
         efectivo = sv("SUM(subtotal_efectivo)")
         transferencia = sv("SUM(subtotal_transferencia)")
+        # Desglose por tipo: venta_total YA incluye la consignación; aquí la
+        # separamos para poder mostrar cuánto del total es propio vs consignación.
+        venta_consignacion = conn.execute(
+            f"SELECT COALESCE(SUM(total),0) FROM ventas v WHERE {cond_v} AND es_consignacion=1", pv
+        ).fetchone()[0]
+        venta_propia = venta_total - venta_consignacion
         venta_costo = conn.execute(
             f"""SELECT COALESCE(SUM(vd.cantidad*vd.costo_unitario),0)
                 FROM venta_detalle vd JOIN ventas v ON vd.venta_id=v.id WHERE {cond_v}""",
@@ -269,6 +275,7 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
     return {
         "desde": desde, "hasta": hasta,
         "venta_total": venta_total, "efectivo": efectivo, "transferencia": transferencia,
+        "venta_propia": venta_propia, "venta_consignacion": venta_consignacion,
         "perdida_ganancia": perdida_total, "venta_real": venta_real,
         "venta_costo": venta_costo, "utilidad_bruta": utilidad_bruta,
         "gastos": {
@@ -299,6 +306,30 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
 def cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
            socios: int = 2, reserva_pct: float = 20.0, perdida_ganancia: float = 0.0):
     return compute_cuadre(desde, hasta, socios, reserva_pct, perdida_ganancia)
+
+
+@router.get("/ventas-por-dia")
+def ventas_por_dia(desde: Optional[str] = None, hasta: Optional[str] = None,
+                   caja_id: Optional[int] = None):
+    """Historial de ventas agrupado por día (registro persistente y accesible por
+    el admin). El total incluye la consignación y se desglosa. Solo lectura."""
+    cond, params = _where_ventas(caja_id, desde, hasta)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""SELECT substr(v.fecha,1,10) AS dia,
+                       COUNT(*) AS num_ventas,
+                       COALESCE(SUM(v.total),0) AS venta_total,
+                       COALESCE(SUM(v.subtotal_efectivo),0) AS efectivo,
+                       COALESCE(SUM(v.subtotal_transferencia),0) AS transferencia,
+                       COALESCE(SUM(CASE WHEN v.es_consignacion=1 THEN v.total ELSE 0 END),0) AS venta_consignacion,
+                       COALESCE(SUM(CASE WHEN v.es_consignacion=0 THEN v.total ELSE 0 END),0) AS venta_propia
+                FROM ventas v
+                WHERE {cond}
+                GROUP BY substr(v.fecha,1,10)
+                ORDER BY dia DESC""",
+            params,
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 @router.get("/inventario")

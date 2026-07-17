@@ -16,6 +16,7 @@ import type {
   CierreVencidasResult,
   ConsignacionReporte,
   CuadreReporte,
+  VentaPorDia,
   Compra,
   CompraPayload,
   Consignacion,
@@ -357,6 +358,13 @@ const reportes = {
     qs.set('socios', String(socios))
     qs.set('reserva_pct', String(reserva_pct))
     return netGet<CuadreReporte>('/reportes/cuadre?' + qs)
+  },
+  ventasPorDia: (desde?: string | null, hasta?: string | null, caja_id?: number | null) => {
+    const qs = new URLSearchParams()
+    if (desde) qs.set('desde', desde)
+    if (hasta) qs.set('hasta', hasta)
+    if (caja_id != null) qs.set('caja_id', String(caja_id))
+    return netGet<VentaPorDia[]>('/reportes/ventas-por-dia?' + qs)
   },
   movimientosDiarios: (desde?: string | null, hasta?: string | null) => {
     const qs = new URLSearchParams()
