@@ -5,7 +5,18 @@ from database import get_conn
 router = APIRouter(prefix="/api/reportes", tags=["reportes"])
 
 
+def _norm_dt(s):
+    """Normaliza una fecha a "YYYY-MM-DD HH:MM:SS" (formato en que la BD guarda
+    las fechas con datetime('now')). El frontend a veces manda ISO con 'T' y 'Z'
+    (p.ej. "2026-07-14T00:00:00.000Z"); sin esto, la comparación de texto en SQLite
+    descartaba el primer día del rango (el espacio ordena antes que la 'T')."""
+    if not s:
+        return s
+    return s.replace("T", " ").replace("Z", "").strip()[:19]
+
+
 def _where_ventas(caja_id, desde, hasta) -> tuple[str, list]:
+    desde, hasta = _norm_dt(desde), _norm_dt(hasta)
     conds = ["v.estado != 'cancelada'"]
     params = []
     if caja_id is not None:
@@ -21,6 +32,7 @@ def _where_ventas(caja_id, desde, hasta) -> tuple[str, list]:
 
 
 def _where_movs(caja_id, desde, hasta) -> tuple[str, list]:
+    desde, hasta = _norm_dt(desde), _norm_dt(hasta)
     conds = ["1=1"]
     params = []
     if caja_id is not None:
@@ -150,14 +162,16 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
     cond_v, pv = _where_ventas(None, desde, hasta)
     cond_m, pm = _where_movs(None, desde, hasta)
 
+    d_desde, d_hasta = _norm_dt(desde), _norm_dt(hasta)
+
     def _date_clause(col: str):
         c, p = "", []
-        if desde:
+        if d_desde:
             c += f" AND {col}>=?"
-            p.append(desde)
-        if hasta:
+            p.append(d_desde)
+        if d_hasta:
             c += f" AND {col}<=?"
-            p.append(hasta)
+            p.append(d_hasta)
         return c, p
 
     with get_conn() as conn:
@@ -204,7 +218,6 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         g_onat = sg("onat")
         g_arrend = sg("arrendamiento")
         g_contador = sg("contador")
-        g_estim = sg("estimulacion")
         g_individual = sg("individual")
 
         # Movimientos de caja
@@ -266,6 +279,11 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
     utilidad_bruta = venta_real - venta_costo
     gastos_operativos = g_salarios + g_transporte
     onat_arrend = g_onat + g_arrend
+    # Estimulación: calculada automáticamente (reemplaza el gasto manual).
+    # 1% de (ventas totales − base fija − ventas al costo); nunca negativa.
+    ESTIM_BASE = 300000.0
+    ESTIM_PCT = 0.01
+    g_estim = max(0.0, (venta_total - ESTIM_BASE - venta_costo) * ESTIM_PCT)
     utilidad_neta = utilidad_bruta - gastos_operativos - onat_arrend - g_contador - g_estim
     reserva = utilidad_neta * reserva_pct / 100
     dividendos = utilidad_neta - reserva

@@ -153,7 +153,6 @@
     { value: 'onat', label: 'ONAT (impuesto)' },
     { value: 'arrendamiento', label: 'Arrendamiento' },
     { value: 'contador', label: 'Contador' },
-    { value: 'estimulacion', label: 'Estimulación' },
     { value: 'individual', label: 'Individual (socio)' },
     { value: 'otro', label: 'Otro' },
   ]
