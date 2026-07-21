@@ -1311,9 +1311,10 @@
                     <th>Estado</th>
                     <th>Apertura</th>
                     <th>Cierre</th>
+                    <th>Total venta</th>
                     <th>Inicial</th>
                     <th>Contado</th>
-                    <th>Diferencia</th>
+                    <th>Faltante / Sobrante</th>
                     <th>Por</th>
                     <th>Observación</th>
                   </tr>
@@ -1321,7 +1322,7 @@
                 <tbody>
                   {#if !cajasHistorialOrdenado.length}
                     <tr class="table-empty-row"
-                      ><td colspan="9"><div class="empty-state">No hay cajas registradas.</div></td></tr
+                      ><td colspan="10"><div class="empty-state">No hay cajas registradas.</div></td></tr
                     >
                   {:else}
                     {#each cajasHistorialOrdenado as c (c.id)}
@@ -1330,9 +1331,20 @@
                         <td>{c.estado === 'abierta' ? 'Abierta' : 'Cerrada'}</td>
                         <td>{formatDateTime(c.fecha_apertura)}</td>
                         <td>{formatDateTime(c.fecha_cierre)}</td>
+                        <td>{c.venta_total != null ? formatMoney(c.venta_total) : '-'}</td>
                         <td>{formatMoney(c.efectivo_inicial)}</td>
                         <td>{c.efectivo_contado != null ? formatMoney(c.efectivo_contado) : '-'}</td>
-                        <td>{c.diferencia != null ? formatMoney(c.diferencia) : '-'}</td>
+                        <td>
+                          {#if c.diferencia == null}
+                            -
+                          {:else if c.diferencia < 0}
+                            <span class="dif-faltante">Faltante {formatMoney(Math.abs(c.diferencia))}</span>
+                          {:else if c.diferencia > 0}
+                            <span class="dif-sobrante">Sobrante {formatMoney(c.diferencia)}</span>
+                          {:else}
+                            <span class="dif-ok">Cuadra</span>
+                          {/if}
+                        </td>
                         <td>{c.abierta_por || '—'}</td>
                         <td>{c.observacion || ''}</td>
                       </tr>
@@ -2788,6 +2800,28 @@
   .badge.hidden {
     background: rgba(220, 38, 38, 0.14);
     color: var(--danger);
+  }
+  .dif-faltante,
+  .dif-sobrante,
+  .dif-ok {
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .dif-faltante {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  .dif-sobrante {
+    background: #fef9c3;
+    color: #854d0e;
+  }
+  .dif-ok {
+    background: #dcfce7;
+    color: #166534;
   }
 
   .filters-grid {

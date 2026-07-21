@@ -95,7 +95,19 @@ def listar():
     with get_conn() as conn:
         _cerrar_vencidas(conn)
         rows = conn.execute("SELECT * FROM cajas ORDER BY id DESC").fetchall()
-    return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            # Total vendido en la caja (todo lo vendido, no cancelado) para que el
+            # admin lo vea junto al arqueo. La diferencia ya guardada es el
+            # faltante(<0)/sobrante(>0) del cierre.
+            d["venta_total"] = conn.execute(
+                "SELECT COALESCE(SUM(total),0) FROM ventas "
+                "WHERE caja_id=? AND estado!='cancelada'",
+                (d["id"],),
+            ).fetchone()[0]
+            result.append(d)
+    return result
 
 
 @router.post("/cerrar-vencidas")

@@ -23,6 +23,15 @@
   let confirmCierre = $state(false)
   let cierreMsg = $state('')
 
+  // Total vendido en esta caja (efectivo + transferencia, todo lo vendido).
+  const totalVenta = $derived(
+    desglose ? (desglose.ventas_efectivo + desglose.ventas_transferencia) : 0,
+  )
+  // Diferencia en vivo mientras el cajero cuenta: >0 sobrante, <0 faltante.
+  const difCierre = $derived(
+    desglose ? (Number(cierreContado || 0) - desglose.efectivo_esperado) : 0,
+  )
+
   async function refresh() {
     estado = await api.cajas.estado()
     // Sincroniza la caja de trabajo con el estado real (por si la cerraron).
@@ -222,6 +231,10 @@
         <button class="btn-outline" type="button" onclick={() => (detail = null)}>Cerrar</button>
       </div>
       <div class="modal-body">
+        <div class="venta-total-banner">
+          <span class="label">Total de venta (todo lo vendido)</span>
+          <strong class="value">${money(totalVenta)}</strong>
+        </div>
         <div class="desglose-grid">
           <div class="desglose-card"><div class="label">Efectivo inicial</div><div class="value">${money(desglose.efectivo_inicial)}</div></div>
           <div class="desglose-card entry"><div class="label">+ Ventas efectivo</div><div class="value">${money(desglose.ventas_efectivo)}</div></div>
@@ -237,6 +250,20 @@
             Efectivo contado al cierre
             <input type="number" min="0" step="0.01" bind:value={cierreContado} />
           </label>
+          <div
+            class="cierre-alert"
+            class:faltante={difCierre < 0}
+            class:sobrante={difCierre > 0}
+            class:ok={difCierre === 0}
+          >
+            {#if difCierre < 0}
+              ⚠ FALTANTE de ${money(Math.abs(difCierre))} — contaste menos de lo esperado
+            {:else if difCierre > 0}
+              ⚠ SOBRANTE de ${money(difCierre)} — contaste más de lo esperado
+            {:else}
+              ✓ Cuadra exacto con el efectivo esperado
+            {/if}
+          </div>
           <label>
             Observación
             <input type="text" placeholder="Ej: diferencia por vuelto" bind:value={cierreObs} />
@@ -450,6 +477,46 @@
   input:focus-visible {
     outline: none;
     box-shadow: var(--ring);
+  }
+  .venta-total-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+  }
+  .venta-total-banner .label {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    opacity: 0.95;
+  }
+  .venta-total-banner .value {
+    font-size: 24px;
+    font-weight: 800;
+  }
+  .cierre-alert {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    text-align: center;
+  }
+  .cierre-alert.ok {
+    background: #dcfce7;
+    color: #166534;
+  }
+  .cierre-alert.faltante {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  .cierre-alert.sobrante {
+    background: #fef9c3;
+    color: #854d0e;
   }
   .desglose-grid {
     display: grid;

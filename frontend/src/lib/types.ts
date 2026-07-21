@@ -69,6 +69,7 @@ export interface Caja {
   observacion: string
   abierta_por_id: number | null
   abierta_por: string | null
+  venta_total?: number
 }
 
 /** Estado de una de las 3 registradoras fijas (GET /cajas/estado). */
