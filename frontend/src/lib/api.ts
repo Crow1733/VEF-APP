@@ -16,6 +16,8 @@ import type {
   CierreVencidasResult,
   ConsignacionReporte,
   CuadreReporte,
+  MovimientosCajaReporte,
+  InventarioMovimientos,
   VentaPorDia,
   Compra,
   CompraPayload,
@@ -351,6 +353,10 @@ const reportes = {
     ),
   consignaciones: (desde?: string | null, hasta?: string | null, caja_id?: number | null) =>
     netGet<ConsignacionReporte>('/reportes/consignaciones?' + reporteQS(desde, hasta, caja_id)),
+  movimientosCaja: (desde?: string | null, hasta?: string | null, caja_id?: number | null) =>
+    netGet<MovimientosCajaReporte>('/reportes/movimientos-caja?' + reporteQS(desde, hasta, caja_id)),
+  inventarioMovimientos: (desde?: string | null, hasta?: string | null) =>
+    netGet<InventarioMovimientos>('/reportes/inventario-movimientos?' + reporteQS(desde, hasta)),
   cuadre: (desde?: string | null, hasta?: string | null, socios = 2, reserva_pct = 20) => {
     const qs = new URLSearchParams()
     if (desde) qs.set('desde', desde)

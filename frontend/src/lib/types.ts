@@ -463,6 +463,55 @@ export interface CuadreReporte {
   consignadores_a_pagar: number
   faltante_sobrante: number
   efectivo_caja: number
+  bajas_total?: number
+  entradas_costo?: number
+}
+
+// ── Movimientos de caja (libro / ledger) ─────────────────────────────────────
+export interface MovimientoCaja {
+  id: number
+  caja_id: number | null
+  caja_numero: number | null
+  fecha: string
+  tipo_movimiento: string
+  concepto: string
+  monto: number
+  metodo_pago: string | null
+  es_extraccion: number
+  es_compra_mercancia: number
+  cajero_nombre: string | null
+  direccion: 'entra' | 'sale'
+}
+export interface MovimientosCajaReporte {
+  movimientos: MovimientoCaja[]
+  resumen: { entra: number; sale: number; neto: number; n: number }
+}
+
+// ── Movimientos de inventario (entradas / bajas) ─────────────────────────────
+export interface InvMovCategoria {
+  categoria: string
+  uds: number
+  valor: number
+}
+export interface InvMovDetalle {
+  fecha: string
+  producto: string
+  categoria: string
+  cantidad: number
+  costo_unitario: number
+  valor: number
+  razon?: string
+  observacion?: string
+}
+export interface InvMovLado {
+  total_uds: number
+  total_valor: number
+  por_categoria: InvMovCategoria[]
+  detalle: InvMovDetalle[]
+}
+export interface InventarioMovimientos {
+  entradas: InvMovLado
+  bajas: InvMovLado
 }
 
 // ── Ventas agrupadas por día (historial diario accesible por el admin) ────────

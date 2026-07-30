@@ -262,6 +262,15 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
             f"SELECT COALESCE(SUM(cantidad*costo_unitario),0) FROM bajas WHERE 1=1{dc}", dp
         ).fetchone()[0]
 
+        # Entradas (compras de mercancía) valoradas al costo en el rango
+        cc, cp = _date_clause("c.fecha")
+        entradas_costo = conn.execute(
+            f"""SELECT COALESCE(SUM(cd.subtotal),0)
+                FROM compra_detalle cd JOIN compras c ON cd.compra_id=c.id
+                WHERE 1=1{cc}""",
+            cp,
+        ).fetchone()[0]
+
         # Transferencia desglosada por persona/socio ("Transferencia jesus" vs general)
         ts_rows = conn.execute(
             f"""SELECT COALESCE(NULLIF(v.transferencia_socio,''),'general') soc,
@@ -316,6 +325,7 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         "venta_libreta": venta_libreta,
         "cobros_libreta": cobros_libreta,
         "bajas_total": bajas_total,
+        "entradas_costo": entradas_costo,
         "transferencia_por_socio": transferencia_por_socio,
     }
 
@@ -348,6 +358,123 @@ def ventas_por_dia(desde: Optional[str] = None, hasta: Optional[str] = None,
             params,
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+@router.get("/movimientos-caja")
+def movimientos_caja(desde: Optional[str] = None, hasta: Optional[str] = None,
+                     caja_id: Optional[int] = None):
+    """Libro de movimientos de caja: cada entrada/salida de efectivo con su
+    dirección, más un resumen (entra/sale/neto). 'Todo lo que se mueve'."""
+    d1, d2 = _norm_dt(desde), _norm_dt(hasta)
+    conds, params = ["1=1"], []
+    if caja_id is not None:
+        conds.append("m.caja_id=?")
+        params.append(caja_id)
+    if d1:
+        conds.append("m.fecha>=?")
+        params.append(d1)
+    if d2:
+        conds.append("m.fecha<=?")
+        params.append(d2)
+    where = " AND ".join(conds)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""SELECT m.*, c.numero AS caja_numero
+                FROM movimientos_caja m
+                LEFT JOIN cajas c ON m.caja_id=c.id
+                WHERE {where}
+                ORDER BY m.fecha DESC, m.id DESC""",
+            params,
+        ).fetchall()
+    entra = sale = 0.0
+    movimientos = []
+    for r in rows:
+        d = dict(r)
+        monto = d.get("monto") or 0
+        # Sale el dinero si es extracción, compra de mercancía o pago; si no, entra.
+        if d.get("es_extraccion") or d.get("es_compra_mercancia") or d.get("tipo_movimiento") == "pago":
+            d["direccion"] = "sale"
+            sale += monto
+        else:
+            d["direccion"] = "entra"
+            entra += monto
+        movimientos.append(d)
+    return {
+        "movimientos": movimientos,
+        "resumen": {"entra": entra, "sale": sale, "neto": entra - sale, "n": len(movimientos)},
+    }
+
+
+@router.get("/inventario-movimientos")
+def inventario_movimientos(desde: Optional[str] = None, hasta: Optional[str] = None):
+    """Resumen + detalle de ENTRADAS (compras) y BAJAS (mermas) del rango,
+    valoradas al costo. Solo lectura."""
+    d1, d2 = _norm_dt(desde), _norm_dt(hasta)
+
+    def clause(col):
+        c, p = "", []
+        if d1:
+            c += f" AND {col}>=?"
+            p.append(d1)
+        if d2:
+            c += f" AND {col}<=?"
+            p.append(d2)
+        return c, p
+
+    with get_conn() as conn:
+        ec, ep = clause("co.fecha")
+        ent_cat = conn.execute(
+            f"""SELECT cat.nombre AS categoria,
+                       COALESCE(SUM(cd.cantidad),0) AS uds,
+                       COALESCE(SUM(cd.subtotal),0) AS valor
+                FROM compra_detalle cd
+                JOIN compras co ON cd.compra_id=co.id
+                JOIN productos p ON cd.producto_id=p.id
+                JOIN categorias cat ON p.categoria_id=cat.id
+                WHERE 1=1{ec} GROUP BY cat.id ORDER BY valor DESC""", ep).fetchall()
+        ent_det = conn.execute(
+            f"""SELECT co.fecha, p.nombre AS producto, cat.nombre AS categoria,
+                       cd.cantidad, cd.costo_unitario, cd.subtotal AS valor
+                FROM compra_detalle cd
+                JOIN compras co ON cd.compra_id=co.id
+                JOIN productos p ON cd.producto_id=p.id
+                JOIN categorias cat ON p.categoria_id=cat.id
+                WHERE 1=1{ec} ORDER BY co.fecha DESC, cd.id DESC""", ep).fetchall()
+        bc, bp = clause("b.fecha")
+        baj_cat = conn.execute(
+            f"""SELECT cat.nombre AS categoria,
+                       COALESCE(SUM(b.cantidad),0) AS uds,
+                       COALESCE(SUM(b.cantidad*b.costo_unitario),0) AS valor
+                FROM bajas b
+                JOIN productos p ON b.producto_id=p.id
+                JOIN categorias cat ON p.categoria_id=cat.id
+                WHERE 1=1{bc} GROUP BY cat.id ORDER BY valor DESC""", bp).fetchall()
+        baj_det = conn.execute(
+            f"""SELECT b.fecha, p.nombre AS producto, cat.nombre AS categoria,
+                       b.cantidad, b.costo_unitario,
+                       (b.cantidad*b.costo_unitario) AS valor, b.razon, b.observacion
+                FROM bajas b
+                JOIN productos p ON b.producto_id=p.id
+                JOIN categorias cat ON p.categoria_id=cat.id
+                WHERE 1=1{bc} ORDER BY b.fecha DESC, b.id DESC""", bp).fetchall()
+
+    def suma(rows, k):
+        return sum((r[k] or 0) for r in rows)
+
+    return {
+        "entradas": {
+            "total_uds": suma(ent_cat, "uds"),
+            "total_valor": suma(ent_cat, "valor"),
+            "por_categoria": [dict(r) for r in ent_cat],
+            "detalle": [dict(r) for r in ent_det],
+        },
+        "bajas": {
+            "total_uds": suma(baj_cat, "uds"),
+            "total_valor": suma(baj_cat, "valor"),
+            "por_categoria": [dict(r) for r in baj_cat],
+            "detalle": [dict(r) for r in baj_det],
+        },
+    }
 
 
 @router.get("/inventario")

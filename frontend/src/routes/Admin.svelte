@@ -17,6 +17,8 @@
     Cierre,
     ConsignacionReporte,
     CuadreReporte,
+    MovimientosCajaReporte,
+    InventarioMovimientos,
     CuentaPorPagar,
     Credito,
     Gasto,
@@ -34,7 +36,7 @@
 
   type MainTab = 'productos' | 'categorias' | 'caja' | 'economia' | 'usuarios'
   // prettier-ignore
-  type EconTab = 'ventas' | 'extracciones' | 'reportes' | 'inventario' | 'gastos' | 'consignaciones' | 'deudas' | 'creditos' | 'cuadre' | 'historial'
+  type EconTab = 'ventas' | 'movimientos' | 'bajasentradas' | 'extracciones' | 'reportes' | 'inventario' | 'gastos' | 'consignaciones' | 'deudas' | 'creditos' | 'cuadre' | 'historial'
   type CajaSel = 'all' | number
 
   // ── Estado de navegación / filtros ──────────────────────────────────────
@@ -44,6 +46,7 @@
   let customRange = $state<{ from: string; to: string } | null>(null)
   let cajaFilter = $state<{
     ventas: CajaSel
+    movimientos: CajaSel
     extracciones: CajaSel
     reportes: CajaSel
     inventario: CajaSel
@@ -55,6 +58,7 @@
     historial: CajaSel
   }>({
     ventas: 'all',
+    movimientos: 'all',
     extracciones: 'all',
     reportes: 'all',
     inventario: 'all',
@@ -199,6 +203,28 @@
   let cierresList = $state<Cierre[]>([])
   let resumen = $state<ResumenCierres | null>(null)
   let cuadreError = $state('')
+
+  // ── Movimientos de caja (libro / ledger) ────────────────────────────────────
+  let movData = $state<MovimientosCajaReporte | null>(null)
+  let movCuadre = $state<CuadreReporte | null>(null)
+  let movFilter = $state<'week' | 'month' | 'all'>('month')
+  let movRange = $state<{ from: string; to: string } | null>(null)
+  let movFrom = $state('')
+  let movTo = $state('')
+
+  // ── Bajas / Entradas (movimientos de inventario) ────────────────────────────
+  let invMovData = $state<InventarioMovimientos | null>(null)
+  let invFilter = $state<'week' | 'month' | 'all'>('month')
+  let invRange = $state<{ from: string; to: string } | null>(null)
+  let invFrom = $state('')
+  let invTo = $state('')
+  // Lista unificada entradas + bajas (más reciente primero) para el detalle.
+  const invMovDetalle = $derived.by(() => {
+    if (!invMovData) return [] as Array<Record<string, unknown>>
+    const ent = invMovData.entradas.detalle.map((d) => ({ ...d, tipo: 'Entrada' }))
+    const baj = invMovData.bajas.detalle.map((d) => ({ ...d, tipo: 'Baja' }))
+    return [...ent, ...baj].sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
+  })
 
   // ── Resumen de ventas del día (mismo cálculo que el cuadre, rango = hoy) ─────
   let resumenDiario = $state<CuadreReporte | null>(null)
@@ -456,6 +482,65 @@
     void consigRange
     void cajaFilter.consignaciones
     loadConsignaciones()
+  })
+
+  // ── Movimientos de caja ─────────────────────────────────────────────────────
+  function rangoDe(
+    filtro: 'week' | 'month' | 'all',
+    rango: { from: string; to: string } | null,
+  ): { desde: string | null; hasta: string | null } {
+    if (rango) {
+      return { desde: `${rango.from}T00:00:00.000Z`, hasta: `${rango.to}T23:59:59.999Z` }
+    }
+    if (filtro === 'all') return { desde: null, hasta: null }
+    const now = new Date()
+    const from = new Date(now)
+    from.setDate(from.getDate() - (filtro === 'month' ? 30 : 7))
+    return { desde: from.toISOString(), hasta: now.toISOString() }
+  }
+
+  async function loadMovimientos() {
+    const { desde, hasta } = rangoDe(movFilter, movRange)
+    const caja = getCajaFilter('movimientos')
+    ;[movData, movCuadre] = await Promise.all([
+      api.reportes.movimientosCaja(desde, hasta, caja),
+      api.reportes.cuadre(desde, hasta),
+    ])
+  }
+  function applyMovRange() {
+    if (movFrom && movTo) movRange = { from: movFrom, to: movTo }
+  }
+  function setMovQuick(f: 'week' | 'month' | 'all') {
+    movFilter = f
+    movRange = null
+  }
+  $effect(() => {
+    if (!ready) return
+    if (activeTab !== 'economia' || activeEconomia !== 'movimientos') return
+    void movFilter
+    void movRange
+    void cajaFilter.movimientos
+    loadMovimientos()
+  })
+
+  // ── Bajas / Entradas ─────────────────────────────────────────────────────────
+  async function loadInvMov() {
+    const { desde, hasta } = rangoDe(invFilter, invRange)
+    invMovData = await api.reportes.inventarioMovimientos(desde, hasta)
+  }
+  function applyInvRange() {
+    if (invFrom && invTo) invRange = { from: invFrom, to: invTo }
+  }
+  function setInvQuick(f: 'week' | 'month' | 'all') {
+    invFilter = f
+    invRange = null
+  }
+  $effect(() => {
+    if (!ready) return
+    if (activeTab !== 'economia' || activeEconomia !== 'bajasentradas') return
+    void invFilter
+    void invRange
+    loadInvMov()
   })
 
   async function loadDeudas() {
@@ -1361,7 +1446,7 @@
       {#if activeTab === 'economia'}
         <section class="tab-panel active">
           <nav class="sub-tabs">
-            {#each [['ventas', 'Ventas'], ['extracciones', 'Extracciones'], ['reportes', 'Reportes'], ['inventario', 'Inventario'], ['gastos', 'Gastos'], ['consignaciones', 'Consignaciones'], ['deudas', 'Cuentas x pagar'], ['creditos', 'Cuentas x cobrar'], ['cuadre', 'Cuadre'], ['historial', 'Multi-semana']] as [t, label] (t)}
+            {#each [['ventas', 'Ventas'], ['movimientos', 'Movimientos'], ['bajasentradas', 'Bajas/Entradas'], ['extracciones', 'Extracciones'], ['reportes', 'Reportes'], ['inventario', 'Inventario'], ['gastos', 'Gastos'], ['consignaciones', 'Consignaciones'], ['deudas', 'Cuentas x pagar'], ['creditos', 'Cuentas x cobrar'], ['cuadre', 'Cuadre'], ['historial', 'Multi-semana']] as [t, label] (t)}
               <button
                 class="sub-tab-button"
                 class:active={activeEconomia === t}
@@ -1511,6 +1596,171 @@
                     {/each}
                   {/if}
                 </div>
+              </article>
+            </div>
+          {/if}
+
+          {#if activeEconomia === 'movimientos'}
+            <div class="econ-panel active">
+              <article class="panel-card">
+                <div class="card-head-row">
+                  <h2>Movimientos — todo lo que se mueve</h2>
+                </div>
+                <p class="muted">Tablero de totales del período y libro detallado de cada entrada/salida de caja.</p>
+                <div class="quick-filters">
+                  {#each [['week', 'Última semana'], ['month', 'Último mes'], ['all', 'Todo']] as [f, label] (f)}
+                    <button class="btn filter" class:active={movFilter === f && !movRange} type="button" onclick={() => setMovQuick(f as 'week' | 'month' | 'all')}>{label}</button>
+                  {/each}
+                </div>
+                <div class="date-range">
+                  <label>Desde<input type="date" bind:value={movFrom} /></label>
+                  <label>Hasta<input type="date" bind:value={movTo} /></label>
+                  <button class="btn" type="button" onclick={applyMovRange}>Aplicar</button>
+                </div>
+                <fieldset class="cajas-filter">
+                  <legend>Cajas</legend>
+                  {#each ['all', 1, 2, 3] as c (c)}
+                    <button class="btn filter" class:active={String(cajaFilter.movimientos) === String(c)} type="button" onclick={() => (cajaFilter.movimientos = c as CajaSel)}>{c === 'all' ? 'Todas' : `Caja ${c}`}</button>
+                  {/each}
+                </fieldset>
+
+                {#if movCuadre}
+                  <div class="daily-summary-grid" style="margin: 14px 0;">
+                    <div class="ds-item"><div class="ds-label">Venta total</div><div class="ds-value">{formatMoney(movCuadre.venta_total)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Efectivo</div><div class="ds-value">{formatMoney(movCuadre.efectivo)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Transferencia</div><div class="ds-value">{formatMoney(movCuadre.transferencia)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Entradas (costo)</div><div class="ds-value">{formatMoney(movCuadre.entradas_costo ?? 0)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Bajas (costo)</div><div class="ds-value">{formatMoney(movCuadre.bajas_total ?? 0)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Utilidad neta</div><div class="ds-value">{formatMoney(movCuadre.utilidad_neta)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Faltante/Sobrante</div><div class="ds-value">{formatMoney(movCuadre.faltante_sobrante)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Efectivo en caja</div><div class="ds-value">{formatMoney(movCuadre.efectivo_caja)}</div></div>
+                  </div>
+                {/if}
+
+                {#if movData}
+                  <div class="mov-resumen">
+                    <span class="dif-ok">Entra {formatMoney(movData.resumen.entra)}</span>
+                    <span class="dif-faltante">Sale {formatMoney(movData.resumen.sale)}</span>
+                    <span class="muted">Neto <strong>{formatMoney(movData.resumen.neto)}</strong> · {movData.resumen.n} movimientos</span>
+                  </div>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr><th>Fecha</th><th>Caja</th><th>Tipo</th><th>Concepto</th><th>Cajero</th><th>Entra</th><th>Sale</th></tr>
+                      </thead>
+                      <tbody>
+                        {#if !movData.movimientos.length}
+                          <tr class="table-empty-row"><td colspan="7"><div class="empty-state">Sin movimientos en el período.</div></td></tr>
+                        {:else}
+                          {#each movData.movimientos as m (m.id)}
+                            <tr>
+                              <td data-label="Fecha">{formatDateTime(m.fecha)}</td>
+                              <td data-label="Caja">{m.caja_numero != null ? `Caja ${m.caja_numero}` : '—'}</td>
+                              <td data-label="Tipo">{m.tipo_movimiento}</td>
+                              <td data-label="Concepto">{m.concepto}</td>
+                              <td data-label="Cajero">{m.cajero_nombre || '—'}</td>
+                              <td data-label="Entra" class="mov-in">{m.direccion === 'entra' ? formatMoney(m.monto) : ''}</td>
+                              <td data-label="Sale" class="mov-out">{m.direccion === 'sale' ? formatMoney(m.monto) : ''}</td>
+                            </tr>
+                          {/each}
+                        {/if}
+                      </tbody>
+                    </table>
+                  </div>
+                {/if}
+              </article>
+            </div>
+          {/if}
+
+          {#if activeEconomia === 'bajasentradas'}
+            <div class="econ-panel active">
+              <article class="panel-card">
+                <h2>Bajas y Entradas</h2>
+                <p class="muted">Resumen y detalle del movimiento de inventario, valorado al costo.</p>
+                <div class="quick-filters">
+                  {#each [['week', 'Última semana'], ['month', 'Último mes'], ['all', 'Todo']] as [f, label] (f)}
+                    <button class="btn filter" class:active={invFilter === f && !invRange} type="button" onclick={() => setInvQuick(f as 'week' | 'month' | 'all')}>{label}</button>
+                  {/each}
+                </div>
+                <div class="date-range">
+                  <label>Desde<input type="date" bind:value={invFrom} /></label>
+                  <label>Hasta<input type="date" bind:value={invTo} /></label>
+                  <button class="btn" type="button" onclick={applyInvRange}>Aplicar</button>
+                </div>
+
+                {#if invMovData}
+                  <div class="daily-summary-grid" style="margin: 14px 0;">
+                    <div class="ds-item"><div class="ds-label">Entradas (uds)</div><div class="ds-value">{invMovData.entradas.total_uds}</div></div>
+                    <div class="ds-item"><div class="ds-label">Entradas (costo)</div><div class="ds-value">{formatMoney(invMovData.entradas.total_valor)}</div></div>
+                    <div class="ds-item"><div class="ds-label">Bajas (uds)</div><div class="ds-value">{invMovData.bajas.total_uds}</div></div>
+                    <div class="ds-item"><div class="ds-label">Bajas (costo)</div><div class="ds-value">{formatMoney(invMovData.bajas.total_valor)}</div></div>
+                  </div>
+
+                  <div class="be-cats">
+                    <div class="be-cat-col">
+                      <h3>Entradas por categoría</h3>
+                      <div class="table-wrap">
+                        <table>
+                          <thead><tr><th>Categoría</th><th>Uds</th><th>Valor</th></tr></thead>
+                          <tbody>
+                            {#if !invMovData.entradas.por_categoria.length}
+                              <tr class="table-empty-row"><td colspan="3"><div class="empty-state">Sin entradas.</div></td></tr>
+                            {:else}
+                              {#each invMovData.entradas.por_categoria as r (r.categoria)}
+                                <tr><td data-label="Categoría">{r.categoria}</td><td data-label="Uds">{r.uds}</td><td data-label="Valor">{formatMoney(r.valor)}</td></tr>
+                              {/each}
+                            {/if}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div class="be-cat-col">
+                      <h3>Bajas por categoría</h3>
+                      <div class="table-wrap">
+                        <table>
+                          <thead><tr><th>Categoría</th><th>Uds</th><th>Valor</th></tr></thead>
+                          <tbody>
+                            {#if !invMovData.bajas.por_categoria.length}
+                              <tr class="table-empty-row"><td colspan="3"><div class="empty-state">Sin bajas.</div></td></tr>
+                            {:else}
+                              {#each invMovData.bajas.por_categoria as r (r.categoria)}
+                                <tr><td data-label="Categoría">{r.categoria}</td><td data-label="Uds">{r.uds}</td><td data-label="Valor">{formatMoney(r.valor)}</td></tr>
+                              {/each}
+                            {/if}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 style="margin-top: 14px;">Detalle</h3>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Categoría</th><th>Cantidad</th><th>Valor (costo)</th><th>Motivo</th></tr>
+                      </thead>
+                      <tbody>
+                        {#if !invMovDetalle.length}
+                          <tr class="table-empty-row"><td colspan="7"><div class="empty-state">Sin movimientos de inventario en el período.</div></td></tr>
+                        {:else}
+                          {#each invMovDetalle as d, i (i)}
+                            <tr>
+                              <td data-label="Fecha">{formatDateTime(String(d.fecha))}</td>
+                              <td data-label="Tipo">
+                                {#if d.tipo === 'Entrada'}<span class="dif-ok">Entrada</span>{:else}<span class="dif-faltante">Baja</span>{/if}
+                              </td>
+                              <td data-label="Producto">{d.producto}</td>
+                              <td data-label="Categoría">{d.categoria}</td>
+                              <td data-label="Cantidad">{d.cantidad}</td>
+                              <td data-label="Valor (costo)">{formatMoney(Number(d.valor))}</td>
+                              <td data-label="Motivo">{d.razon || d.observacion || '—'}</td>
+                            </tr>
+                          {/each}
+                        {/if}
+                      </tbody>
+                    </table>
+                  </div>
+                {/if}
               </article>
             </div>
           {/if}
@@ -2822,6 +3072,38 @@
   .dif-ok {
     background: #dcfce7;
     color: #166534;
+  }
+  .mov-resumen {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 10px 0;
+  }
+  .mov-in {
+    color: var(--success);
+    font-weight: 600;
+  }
+  .mov-out {
+    color: var(--danger);
+    font-weight: 600;
+  }
+  .be-cats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .be-cat-col h3 {
+    margin: 8px 0;
+    font-size: 15px;
+  }
+  .be-cats table {
+    min-width: 0;
+  }
+  @media (max-width: 760px) {
+    .be-cats {
+      grid-template-columns: 1fr;
+    }
   }
 
   .filters-grid {
