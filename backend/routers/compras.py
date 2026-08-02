@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from database import get_conn
 
@@ -90,3 +90,29 @@ def registrar(payload: CompraPayload):
                 )
 
         return _detalle_compra(conn, compra_id)
+
+
+@router.delete("/{id}")
+def eliminar(id: int):
+    """Borra una compra/entrada (deshacer doble registro). Revierte el stock que
+    sumó y elimina el movimiento de caja asociado. El costo del producto NO se
+    revierte (queda el último valor conocido)."""
+    with get_conn() as conn:
+        compra = conn.execute("SELECT id FROM compras WHERE id=?", (id,)).fetchone()
+        if not compra:
+            raise HTTPException(status_code=404, detail="Compra no encontrada")
+        items = conn.execute(
+            "SELECT producto_id, cantidad FROM compra_detalle WHERE compra_id=?", (id,)
+        ).fetchall()
+        for it in items:
+            conn.execute(
+                "UPDATE productos SET stock_actual = MAX(0, stock_actual - ?) WHERE id=?",
+                (it["cantidad"], it["producto_id"]),
+            )
+        conn.execute(
+            "DELETE FROM movimientos_caja WHERE relacionado_tipo='compra' AND relacionado_id=?",
+            (id,),
+        )
+        conn.execute("DELETE FROM compra_detalle WHERE compra_id=?", (id,))
+        conn.execute("DELETE FROM compras WHERE id=?", (id,))
+    return {"ok": True}

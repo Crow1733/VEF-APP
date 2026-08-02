@@ -69,6 +69,30 @@ def registrar_extraccion(payload: ExtraccionPayload):
     return {"ok": True, "mov": dict(row)}
 
 
+@router.delete("/{id}")
+def eliminar(id: int):
+    """Borra un movimiento de caja MANUAL (extracción o pago) — útil para
+    deshacer un doble registro. Al eliminarlo se revierte su efecto en el
+    efectivo (el esperado se recalcula sobre los movimientos restantes).
+    Los movimientos ligados a una venta/compra/crédito NO se borran aquí:
+    hay que eliminar la operación de origen desde su apartado."""
+    with get_conn() as conn:
+        mov = conn.execute("SELECT * FROM movimientos_caja WHERE id=?", (id,)).fetchone()
+        if not mov:
+            raise HTTPException(status_code=404, detail="Movimiento no encontrado")
+        if mov["relacionado_tipo"]:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Este movimiento está ligado a una operación de tipo "
+                    f"'{mov['relacionado_tipo']}'. Elimínala desde su apartado "
+                    f"(Ventas / Entradas), no desde aquí."
+                ),
+            )
+        conn.execute("DELETE FROM movimientos_caja WHERE id=?", (id,))
+    return {"ok": True}
+
+
 @router.post("/pago")
 def registrar_pago(payload: PagoPayload):
     with get_conn() as conn:

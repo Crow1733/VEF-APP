@@ -481,6 +481,7 @@ export interface MovimientoCaja {
   es_compra_mercancia: number
   cajero_nombre: string | null
   direccion: 'entra' | 'sale'
+  relacionado_tipo?: string | null
 }
 export interface MovimientosCajaReporte {
   movimientos: MovimientoCaja[]
@@ -502,6 +503,8 @@ export interface InvMovDetalle {
   valor: number
   razon?: string
   observacion?: string
+  compra_id?: number
+  baja_id?: number
 }
 export interface InvMovLado {
   total_uds: number

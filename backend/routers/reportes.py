@@ -433,7 +433,8 @@ def inventario_movimientos(desde: Optional[str] = None, hasta: Optional[str] = N
                 JOIN categorias cat ON p.categoria_id=cat.id
                 WHERE 1=1{ec} GROUP BY cat.id ORDER BY valor DESC""", ep).fetchall()
         ent_det = conn.execute(
-            f"""SELECT co.fecha, p.nombre AS producto, cat.nombre AS categoria,
+            f"""SELECT co.fecha, co.id AS compra_id, p.nombre AS producto,
+                       cat.nombre AS categoria,
                        cd.cantidad, cd.costo_unitario, cd.subtotal AS valor
                 FROM compra_detalle cd
                 JOIN compras co ON cd.compra_id=co.id
@@ -450,7 +451,8 @@ def inventario_movimientos(desde: Optional[str] = None, hasta: Optional[str] = N
                 JOIN categorias cat ON p.categoria_id=cat.id
                 WHERE 1=1{bc} GROUP BY cat.id ORDER BY valor DESC""", bp).fetchall()
         baj_det = conn.execute(
-            f"""SELECT b.fecha, p.nombre AS producto, cat.nombre AS categoria,
+            f"""SELECT b.fecha, b.id AS baja_id, p.nombre AS producto,
+                       cat.nombre AS categoria,
                        b.cantidad, b.costo_unitario,
                        (b.cantidad*b.costo_unitario) AS valor, b.razon, b.observacion
                 FROM bajas b

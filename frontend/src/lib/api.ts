@@ -315,12 +315,14 @@ const movimientos = {
       throw e
     }
   },
+  eliminar: (id: number) => netDel<{ ok: boolean }>(`/movimientos/${id}`),
 }
 
 // ── Compras ────────────────────────────────────────────────────────────────
 const compras = {
   listar: () => netGet<Compra[]>('/compras'),
   registrar: (p: CompraPayload) => netPost<Compra>('/compras', { ...opMeta(), ...p }),
+  eliminar: (id: number) => netDel<{ ok: boolean }>(`/compras/${id}`),
 }
 
 // ── Consignaciones ─────────────────────────────────────────────────────────

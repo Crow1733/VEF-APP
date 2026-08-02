@@ -514,6 +514,22 @@
     movFilter = f
     movRange = null
   }
+  function deleteMovimiento(m: MovimientosCajaReporte['movimientos'][number]) {
+    showConfirm({
+      title: 'Eliminar movimiento',
+      text: `Se eliminará "${m.concepto}" (${formatMoney(m.monto)}) de la caja ${m.caja_numero ?? ''}. Se revertirá su efecto en el efectivo. Esta acción no se puede deshacer.`,
+      okLabel: 'Sí, eliminar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.movimientos.eliminar(m.id)
+          await loadMovimientos()
+        } catch (e) {
+          alert((e as Error).message)
+        }
+      },
+    })
+  }
   $effect(() => {
     if (!ready) return
     if (activeTab !== 'economia' || activeEconomia !== 'movimientos') return
@@ -534,6 +550,28 @@
   function setInvQuick(f: 'week' | 'month' | 'all') {
     invFilter = f
     invRange = null
+  }
+  function deleteInvMov(d: Record<string, unknown>) {
+    const esBaja = d.tipo === 'Baja'
+    const id = esBaja ? Number(d.baja_id) : Number(d.compra_id)
+    if (!id) return
+    showConfirm({
+      title: esBaja ? 'Eliminar baja' : 'Eliminar entrada',
+      text: esBaja
+        ? `Se eliminará la baja de "${d.producto}" (${d.cantidad} uds). Se restaurará ese stock al inventario. No se puede deshacer.`
+        : `Se eliminará la ENTRADA (compra) que incluye "${d.producto}". Se revertirá el stock que sumó y el movimiento de caja asociado. Si esa compra incluía varios productos, se eliminan todos. No se puede deshacer.`,
+      okLabel: 'Sí, eliminar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          if (esBaja) await api.bajas.eliminar(id)
+          else await api.compras.eliminar(id)
+          await loadInvMov()
+        } catch (e) {
+          alert((e as Error).message)
+        }
+      },
+    })
   }
   $effect(() => {
     if (!ready) return
@@ -1646,11 +1684,11 @@
                   <div class="table-wrap">
                     <table>
                       <thead>
-                        <tr><th>Fecha</th><th>Caja</th><th>Tipo</th><th>Concepto</th><th>Cajero</th><th>Entra</th><th>Sale</th></tr>
+                        <tr><th>Fecha</th><th>Caja</th><th>Tipo</th><th>Concepto</th><th>Cajero</th><th>Entra</th><th>Sale</th><th>Acciones</th></tr>
                       </thead>
                       <tbody>
                         {#if !movData.movimientos.length}
-                          <tr class="table-empty-row"><td colspan="7"><div class="empty-state">Sin movimientos en el período.</div></td></tr>
+                          <tr class="table-empty-row"><td colspan="8"><div class="empty-state">Sin movimientos en el período.</div></td></tr>
                         {:else}
                           {#each movData.movimientos as m (m.id)}
                             <tr>
@@ -1661,6 +1699,13 @@
                               <td data-label="Cajero">{m.cajero_nombre || '—'}</td>
                               <td data-label="Entra" class="mov-in">{m.direccion === 'entra' ? formatMoney(m.monto) : ''}</td>
                               <td data-label="Sale" class="mov-out">{m.direccion === 'sale' ? formatMoney(m.monto) : ''}</td>
+                              <td data-label="Acciones">
+                                {#if m.relacionado_tipo}
+                                  <span class="muted" title="Se elimina desde su apartado de origen">Ligado a {m.relacionado_tipo}</span>
+                                {:else}
+                                  <button class="btn danger" onclick={() => deleteMovimiento(m)}>Eliminar</button>
+                                {/if}
+                              </td>
                             </tr>
                           {/each}
                         {/if}
@@ -1737,11 +1782,11 @@
                   <div class="table-wrap">
                     <table>
                       <thead>
-                        <tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Categoría</th><th>Cantidad</th><th>Valor (costo)</th><th>Motivo</th></tr>
+                        <tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Categoría</th><th>Cantidad</th><th>Valor (costo)</th><th>Motivo</th><th>Acciones</th></tr>
                       </thead>
                       <tbody>
                         {#if !invMovDetalle.length}
-                          <tr class="table-empty-row"><td colspan="7"><div class="empty-state">Sin movimientos de inventario en el período.</div></td></tr>
+                          <tr class="table-empty-row"><td colspan="8"><div class="empty-state">Sin movimientos de inventario en el período.</div></td></tr>
                         {:else}
                           {#each invMovDetalle as d, i (i)}
                             <tr>
@@ -1754,6 +1799,9 @@
                               <td data-label="Cantidad">{d.cantidad}</td>
                               <td data-label="Valor (costo)">{formatMoney(Number(d.valor))}</td>
                               <td data-label="Motivo">{d.razon || d.observacion || '—'}</td>
+                              <td data-label="Acciones">
+                                <button class="btn danger" onclick={() => deleteInvMov(d)}>Eliminar</button>
+                              </td>
                             </tr>
                           {/each}
                         {/if}
