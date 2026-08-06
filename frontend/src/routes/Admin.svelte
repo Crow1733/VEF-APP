@@ -2335,7 +2335,14 @@
                       <span>− Transporte: <strong class="report-delta exit">{formatMoney(cuadre.gastos.transporte)}</strong></span>
                       <span>− ONAT/Arriendo: <strong class="report-delta exit">{formatMoney(cuadre.gastos.onat + cuadre.gastos.arrendamiento)}</strong></span>
                       <span>− Contador: <strong class="report-delta exit">{formatMoney(cuadre.gastos.contador)}</strong></span>
+                      <span>− Otros gastos: <strong class="report-delta exit">{formatMoney(cuadre.gastos.otros)}</strong></span>
                       <span>− Estimulación: <strong class="report-delta exit">{formatMoney(cuadre.gastos.estimulacion)}</strong></span>
+                    </div>
+                    <div class="report-meta">
+                      <span>Total gastos descontados: <strong class="report-delta exit">{formatMoney(cuadre.gastos.total_descontado)}</strong></span>
+                      {#if cuadre.gastos.individual}
+                        <span class="muted">Individual (reparto a socios, no descuenta): {formatMoney(cuadre.gastos.individual)}</span>
+                      {/if}
                     </div>
                     <div class="report-meta">
                       <span><strong>Utilidad neta: {formatMoney(cuadre.utilidad_neta)}</strong></span>
@@ -2352,6 +2359,7 @@
 
                   <div class="report-card">
                     <div class="report-meta">
+                      <span>Ingresos (cobros): <strong>{formatMoney(cuadre.movimientos.ingresos)}</strong></span>
                       <span>Extracciones: <strong>{formatMoney(cuadre.movimientos.extracciones)}</strong></span>
                       <span>Compras mercancía: <strong>{formatMoney(cuadre.movimientos.compras_mercancia)}</strong></span>
                       <span>Pagos de caja: <strong>{formatMoney(cuadre.movimientos.pagos_caja)}</strong></span>

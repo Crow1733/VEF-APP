@@ -219,6 +219,16 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         g_arrend = sg("arrendamiento")
         g_contador = sg("contador")
         g_individual = sg("individual")
+        # "Otros" = todo gasto que no cae en las categorías de arriba (tipo 'otro'
+        # o cualquier tipo nuevo/no previsto). Se calcula por descarte para que
+        # NINGÚN gasto quede fuera del cuadre. 'individual' se excluye porque es
+        # reparto a socios, no gasto operativo.
+        g_otros = conn.execute(
+            f"""SELECT COALESCE(SUM(monto),0) FROM gastos
+                WHERE tipo NOT IN ('salario','transporte','onat','arrendamiento',
+                                   'contador','individual'){gc}""",
+            gp,
+        ).fetchone()[0]
 
         # Movimientos de caja
         def sm(extra):
@@ -229,6 +239,9 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         extracciones = sm("es_extraccion=1")
         compras_merc = sm("es_compra_mercancia=1")
         pagos_caja = sm("tipo_movimiento='pago' AND es_extraccion=0 AND es_compra_mercancia=0")
+        # Ingresos en efectivo que no son ventas (cobros de crédito/libreta):
+        # entran físicamente al cajón, así que suman al efectivo del cuadre.
+        ingresos_caja = sm("tipo_movimiento='ingreso'")
 
         # Deudas pagadas en el rango
         dc, dp = _date_clause("fecha")
@@ -293,11 +306,17 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
     ESTIM_BASE = 300000.0
     ESTIM_PCT = 0.01
     g_estim = max(0.0, (venta_total - ESTIM_BASE - venta_costo) * ESTIM_PCT)
-    utilidad_neta = utilidad_bruta - gastos_operativos - onat_arrend - g_contador - g_estim
+    # "otros" entra a la utilidad neta: cualquier gasto registrado debe descontarse.
+    utilidad_neta = (
+        utilidad_bruta - gastos_operativos - onat_arrend - g_contador - g_estim - g_otros
+    )
     reserva = utilidad_neta * reserva_pct / 100
     dividendos = utilidad_neta - reserva
     por_socio = dividendos / socios if socios else dividendos
-    efectivo_caja = efectivo - extracciones - compras_merc - pagos_caja - deudas_pagadas
+    # Efectivo en caja: entradas de efectivo (ventas + cobros) menos las salidas.
+    efectivo_caja = (
+        efectivo + ingresos_caja - extracciones - compras_merc - pagos_caja - deudas_pagadas
+    )
 
     return {
         "desde": desde, "hasta": hasta,
@@ -309,7 +328,13 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
             "salarios": g_salarios, "transporte": g_transporte,
             "onat": g_onat, "arrendamiento": g_arrend, "contador": g_contador,
             "estimulacion": g_estim, "individual": g_individual,
+            "otros": g_otros,
             "operativos": gastos_operativos,
+            # Total realmente descontado de la utilidad neta (sin 'individual',
+            # que es reparto a socios y no gasto operativo).
+            "total_descontado": (
+                gastos_operativos + onat_arrend + g_contador + g_estim + g_otros
+            ),
         },
         "utilidad_neta": utilidad_neta,
         "reserva_pct": reserva_pct, "reserva": reserva,
@@ -317,6 +342,7 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         "movimientos": {
             "extracciones": extracciones, "compras_mercancia": compras_merc,
             "pagos_caja": pagos_caja, "deudas_pagadas": deudas_pagadas,
+            "ingresos": ingresos_caja,
         },
         "consignadores_a_pagar": consig_a_pagar,
         "faltante_sobrante": faltante_sobrante,

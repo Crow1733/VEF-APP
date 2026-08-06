@@ -446,7 +446,9 @@ export interface CuadreReporte {
     contador: number
     estimulacion: number
     individual: number
+    otros: number
     operativos: number
+    total_descontado: number
   }
   utilidad_neta: number
   reserva_pct: number
@@ -459,6 +461,7 @@ export interface CuadreReporte {
     compras_mercancia: number
     pagos_caja: number
     deudas_pagadas: number
+    ingresos: number
   }
   consignadores_a_pagar: number
   faltante_sobrante: number
