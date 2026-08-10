@@ -218,6 +218,7 @@
   let invRange = $state<{ from: string; to: string } | null>(null)
   let invFrom = $state('')
   let invTo = $state('')
+  let invProducto = $state('')
   // Lista unificada entradas + bajas (más reciente primero) para el detalle.
   const invMovDetalle = $derived.by(() => {
     if (!invMovData) return [] as Array<Record<string, unknown>>
@@ -542,7 +543,7 @@
   // ── Bajas / Entradas ─────────────────────────────────────────────────────────
   async function loadInvMov() {
     const { desde, hasta } = rangoDe(invFilter, invRange)
-    invMovData = await api.reportes.inventarioMovimientos(desde, hasta)
+    invMovData = await api.reportes.inventarioMovimientos(desde, hasta, invProducto)
   }
   function applyInvRange() {
     if (invFrom && invTo) invRange = { from: invFrom, to: invTo }
@@ -1732,6 +1733,17 @@
                   <label>Hasta<input type="date" bind:value={invTo} /></label>
                   <button class="btn" type="button" onclick={applyInvRange}>Aplicar</button>
                 </div>
+                <div class="filters-grid">
+                  <label class="search-filter">
+                    Buscar producto (nombre o código)
+                    <input
+                      type="search"
+                      placeholder="Escribe para filtrar…"
+                      bind:value={invProducto}
+                      oninput={loadInvMov}
+                    />
+                  </label>
+                </div>
 
                 {#if invMovData}
                   <div class="daily-summary-grid" style="margin: 14px 0;">
@@ -2016,7 +2028,7 @@
 
           {#if activeEconomia === 'gastos'}
             <div class="econ-panel active">
-              <div class="panel-grid two-columns">
+              <div class="panel-grid">
                 <article class="panel-card">
                   <h2>Registrar gasto</h2>
                   <form class="form-grid" onsubmit={submitGasto}>
@@ -2157,7 +2169,7 @@
 
           {#if activeEconomia === 'deudas'}
             <div class="econ-panel active">
-              <div class="panel-grid two-columns">
+              <div class="panel-grid">
                 <article class="panel-card">
                   <h2>Registrar cuenta por pagar</h2>
                   <p class="muted">Mercancía u obligación comprada a crédito (deuda con un proveedor).</p>
@@ -2477,7 +2489,7 @@
       <!-- USUARIOS -->
       {#if activeTab === 'usuarios'}
         <section class="tab-panel active">
-          <div class="panel-grid two-columns">
+          <div class="panel-grid">
             <article class="panel-card">
               <h2>{editingUserId ? `Editar usuario #${editingUserId}` : 'Crear usuario'}</h2>
               <form class="form-grid" onsubmit={submitUser}>
@@ -2788,11 +2800,25 @@
   .panel-grid.single-column {
     grid-template-columns: 1fr;
   }
-  /* Categorías: columna única con altura fija, formulario arriba + lista abajo */
+  /* Layout apilado (Categorías, Gastos, Cuentas x pagar, Usuarios): el formulario
+     de declaración va ARRIBA a lo ancho y la información debajo, para que el
+     formulario nunca quede fuera de la pantalla. */
   .panel-grid:not(.two-columns):not(.single-column) {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
     height: calc(100vh - 165px);
+  }
+  /* En apilado el formulario ocupa solo lo que necesita (no se estira) y sus
+     campos se distribuyen en varias columnas para no crecer a lo alto. */
+  .panel-grid:not(.two-columns):not(.single-column) .form-grid {
+    flex: none;
+    overflow-y: visible;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    align-items: end;
+  }
+  .panel-grid:not(.two-columns):not(.single-column) .form-grid .actions-row,
+  .panel-grid:not(.two-columns):not(.single-column) .form-grid .form-error {
+    grid-column: 1 / -1;
   }
   .cat-form-grid {
     flex: none;

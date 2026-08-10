@@ -302,10 +302,12 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
     gastos_operativos = g_salarios + g_transporte
     onat_arrend = g_onat + g_arrend
     # Estimulación: calculada automáticamente (reemplaza el gasto manual).
-    # 1% de (ventas totales − base fija − ventas al costo); nunca negativa.
+    # 1% de (ventas totales − base fija − pérdida de ganancia − ventas al costo);
+    # nunca negativa. Equivale al 1% de la utilidad bruta por encima de la base.
     ESTIM_BASE = 300000.0
     ESTIM_PCT = 0.01
-    g_estim = max(0.0, (venta_total - ESTIM_BASE - venta_costo) * ESTIM_PCT)
+    estim_subtotal = venta_total - ESTIM_BASE - perdida_total - venta_costo
+    g_estim = max(0.0, estim_subtotal * ESTIM_PCT)
     # "otros" entra a la utilidad neta: cualquier gasto registrado debe descontarse.
     utilidad_neta = (
         utilidad_bruta - gastos_operativos - onat_arrend - g_contador - g_estim - g_otros
@@ -432,10 +434,13 @@ def movimientos_caja(desde: Optional[str] = None, hasta: Optional[str] = None,
 
 
 @router.get("/inventario-movimientos")
-def inventario_movimientos(desde: Optional[str] = None, hasta: Optional[str] = None):
+def inventario_movimientos(desde: Optional[str] = None, hasta: Optional[str] = None,
+                           producto: Optional[str] = None):
     """Resumen + detalle de ENTRADAS (compras) y BAJAS (mermas) del rango,
-    valoradas al costo. Solo lectura."""
+    valoradas al costo. `producto` filtra por nombre o código (búsqueda parcial).
+    Solo lectura."""
     d1, d2 = _norm_dt(desde), _norm_dt(hasta)
+    prod_q = (producto or "").strip()
 
     def clause(col):
         c, p = "", []
@@ -445,6 +450,10 @@ def inventario_movimientos(desde: Optional[str] = None, hasta: Optional[str] = N
         if d2:
             c += f" AND {col}<=?"
             p.append(d2)
+        if prod_q:
+            c += " AND (p.nombre LIKE ? OR COALESCE(p.codigo,'') LIKE ?)"
+            like = f"%{prod_q}%"
+            p.extend([like, like])
         return c, p
 
     with get_conn() as conn:
