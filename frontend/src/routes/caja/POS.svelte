@@ -10,6 +10,13 @@
     precio_unitario: number
     cantidad: number
     es_consignacion: boolean
+    /** Precio normal de venta del producto (no editable por el cajero). */
+    precio_lista: number
+    /** Costo del producto: precio al que se vende si se marca "a precio de costo". */
+    costo: number
+    /** Si está marcado, esta línea se vende al costo (queda registrado como
+     *  pérdida de ganancia en la venta). */
+    al_costo: boolean
   }
 
   const money = (v: number | string) =>
@@ -87,6 +94,11 @@
   )
 
   const cartTotal = $derived(cart.reduce((s, i) => s + i.precio_unitario * i.cantidad, 0))
+  // Líneas vendidas a precio de costo y la ganancia que se deja de ganar por ellas.
+  const lineasAlCosto = $derived(cart.filter((i) => i.al_costo))
+  const perdidaAlCosto = $derived(
+    lineasAlCosto.reduce((s, i) => s + (i.precio_lista - i.costo) * i.cantidad, 0),
+  )
   const filteredCart = $derived(
     cart.filter((i) => i.nombre.toLowerCase().includes(orderSearch.toLowerCase())),
   )
@@ -131,6 +143,9 @@
         precio_unitario: prod.precio_venta,
         cantidad: qty,
         es_consignacion: prod.tipo_producto === 'consignacion',
+        precio_lista: prod.precio_venta,
+        costo: prod.costo,
+        al_costo: false,
       })
     }
     qtys[id] = 1
@@ -142,8 +157,12 @@
   function setCartQty(idx: number, value: string) {
     cart[idx].cantidad = normalizeQty(value)
   }
-  function setItemPrice(idx: number, value: string) {
-    cart[idx].precio_unitario = Math.max(0, Number(value) || 0)
+  /** Alterna una línea entre precio normal y precio de costo. El cajero no puede
+   *  escribir un precio libre: solo elegir entre estos dos. */
+  function toggleAlCosto(idx: number, alCosto: boolean) {
+    const item = cart[idx]
+    item.al_costo = alCosto
+    item.precio_unitario = alCosto ? item.costo : item.precio_lista
   }
   function removeFromCart(idx: number) {
     cart.splice(idx, 1)
@@ -437,18 +456,20 @@
                   <button type="button" onclick={() => changeCartQty(idx, 1)}>+</button>
                 </div>
                 <div class="line-price">
-                  <label class="price-label">
-                    Precio
+                  <label class="costo-toggle" class:activo={item.al_costo}>
                     <input
-                      class="price-input"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputmode="decimal"
-                      value={item.precio_unitario}
-                      onchange={(e) => setItemPrice(idx, e.currentTarget.value)}
+                      type="checkbox"
+                      checked={item.al_costo}
+                      onchange={(e) => toggleAlCosto(idx, e.currentTarget.checked)}
                     />
+                    A precio de costo
                   </label>
+                  <span class="price-shown">
+                    Precio: <strong>${money(item.precio_unitario)}</strong>
+                    {#if item.al_costo}
+                      <span class="costo-badge">costo (normal ${money(item.precio_lista)})</span>
+                    {/if}
+                  </span>
                   <strong>Total: ${money(item.precio_unitario * item.cantidad)}</strong>
                 </div>
               </div>
@@ -482,6 +503,20 @@
         <input type="checkbox" bind:checked={payCredito} />
         <span>Venta a crédito (libreta) — cobra después</span>
       </label>
+
+      {#if lineasAlCosto.length}
+        <div class="costo-resumen">
+          <strong>{lineasAlCosto.length} producto(s) a precio de costo</strong>
+          <ul>
+            {#each lineasAlCosto as l (l.producto_id)}
+              <li>{l.nombre} — {l.cantidad} × ${money(l.costo)} (normal ${money(l.precio_lista)})</li>
+            {/each}
+          </ul>
+          <span class="muted">
+            Se registrará como pérdida de ganancia: <strong>${money(perdidaAlCosto)}</strong>
+          </span>
+        </div>
+      {/if}
 
       {#if payCredito}
         <label class="payment-row">
@@ -870,19 +905,56 @@
     font-weight: 600;
     justify-items: end;
   }
-  .price-input {
-    width: 110px;
+  /* Selector "a precio de costo": reemplaza el campo de precio libre. */
+  .costo-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 10px;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 8px 10px;
-    font: inherit;
+    border-radius: 999px;
+    cursor: pointer;
     background: var(--surface-strong);
-    color: var(--text);
-    text-align: right;
+    white-space: nowrap;
   }
-  .price-input:focus-visible {
-    outline: none;
-    box-shadow: var(--ring);
+  .costo-toggle.activo {
+    background: #fef9c3;
+    color: #854d0e;
+    border-color: #facc15;
+  }
+  .costo-toggle input {
+    margin: 0;
+  }
+  .price-shown {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .costo-badge {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #854d0e;
+    background: #fef9c3;
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .costo-resumen {
+    border: 1px solid #facc15;
+    background: #fefce8;
+    color: #854d0e;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .costo-resumen ul {
+    margin: 0;
+    padding-left: 18px;
   }
   .credit-toggle {
     display: flex;
@@ -1284,9 +1356,9 @@
     .price-label {
       justify-items: start;
     }
-    .price-input {
+    .costo-toggle {
       width: 100%;
-      text-align: left;
+      justify-content: center;
     }
     .search-box {
       width: 100%;

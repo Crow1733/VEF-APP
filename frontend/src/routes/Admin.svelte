@@ -82,6 +82,12 @@
     stockMax: number | null
   }>({ search: '', category: 'all', tipo: 'all', priceMin: null, priceMax: null, stockMin: null, stockMax: null })
   let productFormVisible = $state(true)
+  // Rango de fechas para ver lo vendido de cada producto en ese período.
+  let prodVentaDesde = $state('')
+  let prodVentaHasta = $state('')
+  // producto_id → unidades vendidas en el rango elegido.
+  let ventasPorProducto = $state<Record<number, number>>({})
+  const prodRangoActivo = $derived(Boolean(prodVentaDesde && prodVentaHasta))
 
   // Fechas (inputs de rango)
   let fromDate = $state('')
@@ -755,6 +761,34 @@
     cuadreError = ''
   }
 
+  // ── Vendido por producto en un rango de fechas ─────────────────────────────
+  async function loadVentasPorProducto() {
+    if (!prodVentaDesde || !prodVentaHasta) {
+      ventasPorProducto = {}
+      return
+    }
+    const filas = await api.reportes.utilidadPorProducto(
+      `${prodVentaDesde}T00:00:00.000Z`,
+      `${prodVentaHasta}T23:59:59.999Z`,
+    )
+    const mapa: Record<number, number> = {}
+    for (const f of filas) mapa[f.producto_id] = f.unidades
+    ventasPorProducto = mapa
+  }
+  function limpiarRangoProducto() {
+    prodVentaDesde = ''
+    prodVentaHasta = ''
+    ventasPorProducto = {}
+  }
+  // Recalcula lo vendido cuando cambia el rango (solo en la pestaña Productos).
+  $effect(() => {
+    if (!ready) return
+    if (activeTab !== 'productos') return
+    void prodVentaDesde
+    void prodVentaHasta
+    loadVentasPorProducto()
+  })
+
   // Carga el cuadre al entrar a su sub-pestaña o cambiar filtros/parámetros.
   $effect(() => {
     if (!ready) return
@@ -1271,23 +1305,36 @@
                 <label>Precio max<input type="number" min="0" step="0.01" placeholder="0" bind:value={productFilters.priceMax} /></label>
                 <label>Stock min<input type="number" min="0" step="1" placeholder="0" bind:value={productFilters.stockMin} /></label>
                 <label>Stock max<input type="number" min="0" step="1" placeholder="0" bind:value={productFilters.stockMax} /></label>
+                <label>Vendido desde<input type="date" bind:value={prodVentaDesde} /></label>
+                <label>Vendido hasta<input type="date" bind:value={prodVentaHasta} /></label>
                 <div class="filter-actions">
+                  {#if prodRangoActivo}
+                    <button type="button" class="btn" onclick={limpiarRangoProducto}>Quitar rango</button>
+                  {/if}
                   <button type="button" class="btn" onclick={resetProductFilters}>Limpiar filtros</button>
                 </div>
               </div>
+              {#if prodRangoActivo}
+                <p class="muted" style="margin: 0 0 8px;">
+                  Mostrando lo vendido de cada producto entre <strong>{prodVentaDesde}</strong> y
+                  <strong>{prodVentaHasta}</strong> en la columna «Vendido en rango».
+                </p>
+              {/if}
               <div class="table-wrap">
                 <table>
                   <thead>
                     <tr>
                       <th>ID</th><th>Foto</th><th>Código</th><th>Nombre</th><th>Categoría</th>
                       <th>Tipo</th><th>Costo</th><th>Venta</th><th>Ganancia</th><th>Inicial</th><th>Total</th>
-                      <th>Vendidos</th><th>Acciones</th>
+                      <th>Vendidos</th>
+                      {#if prodRangoActivo}<th>Vendido en rango</th>{/if}
+                      <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {#if !filteredProducts.length}
                       <tr class="table-empty-row"
-                        ><td colspan="13"><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr
+                        ><td colspan={prodRangoActivo ? 14 : 13}><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr
                       >
                     {:else}
                       {#each filteredProducts as p (p.id)}
@@ -1312,6 +1359,9 @@
                           <td data-label="Inicial">{p.stock_inicial}</td>
                           <td data-label="Total">{p.stock_actual}</td>
                           <td data-label="Vendidos">{p.vendidos}</td>
+                          {#if prodRangoActivo}
+                            <td data-label="Vendido en rango"><strong>{ventasPorProducto[p.id] ?? 0}</strong></td>
+                          {/if}
                           <td data-label="Acciones">
                             <div class="row-actions">
                               <button class="btn" onclick={() => editProduct(p.id)}>Editar</button>
@@ -2571,6 +2621,11 @@
                 <div class="muted">Categoría: {item.categoria_nombre || '-'}</div>
                 <div>Cantidad: {item.cantidad} · Unitario: {formatMoney(item.precio_unitario)}</div>
                 <div>Subtotal: <strong>{formatMoney(item.subtotal)}</strong></div>
+                {#if item.perdida_ganancia}
+                  <div class="dif-sobrante" style="margin-top:4px;">
+                    Vendido bajo precio (al costo) · pérdida de ganancia {formatMoney(item.perdida_ganancia)}
+                  </div>
+                {/if}
                 {#if item.es_consignacion}<span class="badge visible">Consignación</span>{/if}
               </div>
             {/each}

@@ -108,6 +108,9 @@ export interface VentaDetalle {
   es_consignacion: number
   producto_nombre: string
   categoria_nombre: string
+  /** >0 cuando se vendió por debajo del precio de lista (p. ej. a precio de costo). */
+  perdida_ganancia?: number
+  ganancia_elevacion?: number
 }
 
 export interface Venta {
