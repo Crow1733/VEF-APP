@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from database import get_conn
+from database import get_conn, norm_fecha
 
 router = APIRouter(prefix="/api/creditos", tags=["creditos"])
 
@@ -60,10 +60,10 @@ def listar(estado: Optional[str] = None, cliente: Optional[str] = None,
         query += " AND cliente LIKE ?"
         params.append(f"%{cliente}%")
     if desde:
-        query += " AND fecha>=?"
+        query += " AND date(fecha)>=date(?)"
         params.append(desde)
     if hasta:
-        query += " AND fecha<=?"
+        query += " AND date(fecha)<=date(?)"
         params.append(hasta)
     query += " ORDER BY (estado='pagada'), fecha DESC, id DESC"
     with get_conn() as conn:
@@ -106,7 +106,7 @@ def registrar(payload: CreditoPayload):
         if payload.fecha:
             cur = conn.execute(
                 f"INSERT INTO creditos {base_cols}, fecha) VALUES (?,?,?,?,?,?,?,?,?)",
-                (*base_vals, payload.fecha),
+                (*base_vals, norm_fecha(payload.fecha)),
             )
         else:
             cur = conn.execute(
@@ -123,6 +123,17 @@ def registrar(payload: CreditoPayload):
             if not prod:
                 continue
             cantidad = item.cantidad
+            # Misma validación que en una venta normal: sin esto se podía fiar
+            # más mercancía de la existente y el stock quedaba en 0, perdiendo
+            # el rastro de las unidades que nunca hubo.
+            if prod["stock_actual"] < cantidad:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Stock insuficiente para '{prod['nombre']}': "
+                        f"disponible {prod['stock_actual']}, solicitado {cantidad}"
+                    ),
+                )
             precio_unitario = (item.precio_unitario if item.precio_unitario is not None
                                else prod["precio_venta"])
             costo_unitario = prod["costo"]
@@ -168,7 +179,7 @@ def pagar(id: int, payload: PagoCreditoPayload):
                 """INSERT INTO pagos_credito
                    (credito_id, fecha, monto, metodo_pago, caja_id, cajero_id, cajero_nombre)
                    VALUES (?,?,?,?,?,?,?)""",
-                (id, payload.fecha, monto, payload.metodo_pago, caja_id,
+                (id, norm_fecha(payload.fecha), monto, payload.metodo_pago, caja_id,
                  payload.cajero_id, payload.cajero_nombre),
             )
         else:

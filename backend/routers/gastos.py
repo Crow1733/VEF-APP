@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from database import get_conn
+from database import get_conn, norm_fecha
 
 router = APIRouter(prefix="/api/gastos", tags=["gastos"])
 
@@ -34,10 +34,10 @@ def listar(desde: Optional[str] = None, hasta: Optional[str] = None, tipo: Optio
     query = "SELECT * FROM gastos WHERE 1=1"
     params: list = []
     if desde:
-        query += " AND fecha>=?"
+        query += " AND date(fecha)>=date(?)"
         params.append(desde)
     if hasta:
-        query += " AND fecha<=?"
+        query += " AND date(fecha)<=date(?)"
         params.append(hasta)
     if tipo:
         query += " AND tipo=?"
@@ -53,12 +53,13 @@ def crear(payload: GastoPayload):
     if payload.monto <= 0:
         raise HTTPException(status_code=422, detail="El monto del gasto debe ser mayor que cero")
     tipo = payload.tipo if payload.tipo in TIPOS else "otro"
+    fecha = norm_fecha(payload.fecha)   # completa la hora si vino solo la fecha
     with get_conn() as conn:
-        if payload.fecha:
+        if fecha:
             cur = conn.execute(
                 """INSERT INTO gastos (fecha, tipo, concepto, monto, socio, cajero_id, cajero_nombre)
                    VALUES (?,?,?,?,?,?,?)""",
-                (payload.fecha, tipo, payload.concepto, payload.monto, payload.socio,
+                (fecha, tipo, payload.concepto, payload.monto, payload.socio,
                  payload.cajero_id, payload.cajero_nombre),
             )
         else:

@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from database import get_conn
+from database import get_conn, norm_fecha
 
 router = APIRouter(prefix="/api/deudas", tags=["deudas"])
 
@@ -46,7 +46,7 @@ def crear(payload: CuentaPayload):
             cur = conn.execute(
                 """INSERT INTO cuentas_por_pagar (fecha, proveedor, concepto, monto, saldo, observacion)
                    VALUES (?,?,?,?,?,?)""",
-                (payload.fecha, payload.proveedor, payload.concepto, payload.monto,
+                (norm_fecha(payload.fecha), payload.proveedor, payload.concepto, payload.monto,
                  payload.monto, payload.observacion),
             )
         else:
@@ -72,7 +72,7 @@ def pagar(id: int, payload: PagoPayload):
                 payload.producto, payload.cantidad, payload.precio_costo, payload.precio_vendido]
         if payload.fecha:
             cols.append("fecha")
-            vals.append(payload.fecha)
+            vals.append(norm_fecha(payload.fecha))
         placeholders = ",".join("?" * len(cols))
         conn.execute(
             f"INSERT INTO pagos_deuda ({','.join(cols)}) VALUES ({placeholders})",

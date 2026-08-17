@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from database import get_conn
+from database import get_conn, norm_fecha
 
 router = APIRouter(prefix="/api/bajas", tags=["bajas"])
 
@@ -32,10 +32,10 @@ def listar(desde: Optional[str] = None, hasta: Optional[str] = None,
     )
     params: list = []
     if desde:
-        query += " AND b.fecha>=?"
+        query += " AND date(b.fecha)>=date(?)"
         params.append(desde)
     if hasta:
-        query += " AND b.fecha<=?"
+        query += " AND date(b.fecha)<=date(?)"
         params.append(hasta)
     if producto_id is not None:
         query += " AND b.producto_id=?"
@@ -61,6 +61,17 @@ def registrar(payload: BajaPayload):
         cantidad = payload.cantidad
         if cantidad <= 0:
             raise HTTPException(status_code=400, detail="La cantidad debe ser mayor que cero")
+        # Sin este corte se podía dar de baja más de lo que hay: el stock quedaba
+        # en 0 y la baja registraba un valor al costo que nunca existió, inflando
+        # las mermas del cuadre.
+        if prod["stock_actual"] < cantidad:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"No se puede dar de baja {cantidad} de '{prod['nombre']}': "
+                    f"solo hay {prod['stock_actual']} en existencia"
+                ),
+            )
         costo_unitario = prod["costo"]
         if payload.fecha:
             cur = conn.execute(
@@ -68,7 +79,7 @@ def registrar(payload: BajaPayload):
                    (fecha, producto_id, cantidad, costo_unitario, razon, observacion,
                     caja_id, cajero_id, cajero_nombre)
                    VALUES (?,?,?,?,?,?,?,?,?)""",
-                (payload.fecha, prod["id"], cantidad, costo_unitario, razon,
+                (norm_fecha(payload.fecha), prod["id"], cantidad, costo_unitario, razon,
                  payload.observacion, payload.caja_id, payload.cajero_id, payload.cajero_nombre),
             )
         else:

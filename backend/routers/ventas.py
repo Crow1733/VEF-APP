@@ -67,10 +67,10 @@ def listar(caja_id: Optional[int] = None, estado: Optional[str] = None,
             query += " AND estado=?"
             params.append(estado)
         if desde:
-            query += " AND fecha>=?"
+            query += " AND date(fecha)>=date(?)"
             params.append(desde)
         if hasta:
-            query += " AND fecha<=?"
+            query += " AND date(fecha)<=date(?)"
             params.append(hasta)
         query += " ORDER BY fecha DESC"
         ids = [r[0] for r in conn.execute(query, params).fetchall()]
@@ -175,6 +175,10 @@ def cancelar(id: int):
         venta = conn.execute("SELECT * FROM ventas WHERE id=?", (id,)).fetchone()
         if not venta:
             raise HTTPException(status_code=404, detail="Venta no encontrada")
+        # Sin este corte, cancelar dos veces devolvía el stock dos veces e inflaba
+        # el inventario con unidades que nunca existieron.
+        if venta["estado"] == "cancelada":
+            raise HTTPException(status_code=409, detail="La venta ya estaba cancelada")
         conn.execute(
             "UPDATE ventas SET estado='cancelada', cancelada_en=datetime('now') WHERE id=?", (id,)
         )

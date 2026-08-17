@@ -15,36 +15,43 @@ def _norm_dt(s):
     return s.replace("T", " ").replace("Z", "").strip()[:19]
 
 
+# Los filtros comparan por DÍA (date(...)) y no por texto completo. Motivo: las
+# declaraciones donde el usuario elige la fecha (gastos, deudas, bajas...) se
+# guardan como "YYYY-MM-DD" (sin hora), y al comparar como texto un valor corto
+# queda fuera del rango "YYYY-MM-DD 00:00:00".."YYYY-MM-DD 23:59:59" — el
+# registro desaparecía del cuadre y de los reportes. Comparar por día funciona
+# con ambos formatos y no exige tocar los datos ya guardados.
+def _rango_dia(col: str, desde, hasta) -> tuple[str, list]:
+    conds, params = [], []
+    if desde:
+        conds.append(f"date({col})>=date(?)")
+        params.append(_norm_dt(desde))
+    if hasta:
+        conds.append(f"date({col})<=date(?)")
+        params.append(_norm_dt(hasta))
+    return (" AND " + " AND ".join(conds) if conds else ""), params
+
+
 def _where_ventas(caja_id, desde, hasta) -> tuple[str, list]:
-    desde, hasta = _norm_dt(desde), _norm_dt(hasta)
     conds = ["v.estado != 'cancelada'"]
     params = []
     if caja_id is not None:
         conds.append("v.caja_id=?")
         params.append(caja_id)
-    if desde:
-        conds.append("v.fecha>=?")
-        params.append(desde)
-    if hasta:
-        conds.append("v.fecha<=?")
-        params.append(hasta)
-    return " AND ".join(conds), params
+    cond_f, params_f = _rango_dia("v.fecha", desde, hasta)
+    base = " AND ".join(conds) + cond_f
+    return base, params + params_f
 
 
 def _where_movs(caja_id, desde, hasta) -> tuple[str, list]:
-    desde, hasta = _norm_dt(desde), _norm_dt(hasta)
     conds = ["1=1"]
     params = []
     if caja_id is not None:
         conds.append("caja_id=?")
         params.append(caja_id)
-    if desde:
-        conds.append("fecha>=?")
-        params.append(desde)
-    if hasta:
-        conds.append("fecha<=?")
-        params.append(hasta)
-    return " AND ".join(conds), params
+    cond_f, params_f = _rango_dia("fecha", desde, hasta)
+    base = " AND ".join(conds) + cond_f
+    return base, params + params_f
 
 
 @router.get("/semanal")
