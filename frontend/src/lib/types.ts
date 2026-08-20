@@ -471,6 +471,13 @@ export interface CuadreReporte {
   efectivo_caja: number
   bajas_total?: number
   entradas_costo?: number
+  /** Venta valorada a precio de lista (equivale a E18 del Excel). */
+  venta_lista?: number
+  /** Importe cobrado por lo vendido a precio de costo (R28 del Excel). */
+  ventas_al_costo?: number
+  /** Pago neto a cada socio: su parte menos lo que ya retiró (I21/J21). */
+  pago_por_socio?: Record<string, number>
+  individual_por_socio?: Record<string, number>
 }
 
 // ── Movimientos de caja (libro / ledger) ─────────────────────────────────────

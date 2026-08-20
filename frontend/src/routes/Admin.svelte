@@ -2384,9 +2384,10 @@
                       <span>Transferencia: <strong>{formatMoney(cuadre.transferencia)}</strong></span>
                     </div>
                     <div class="report-meta">
-                      <span>Pérdida de ganancia: <strong>{formatMoney(cuadre.perdida_ganancia)}</strong></span>
-                      <span>Venta real: <strong>{formatMoney(cuadre.venta_real)}</strong></span>
+                      <span>Pérdida de ganancia: <strong>{formatMoney(cuadre.perdida_ganancia)}</strong> <span class="muted">(indicador)</span></span>
+                      <span>Venta real (cobrada): <strong>{formatMoney(cuadre.venta_real)}</strong></span>
                       <span>Venta al costo: <strong>{formatMoney(cuadre.venta_costo)}</strong></span>
+                      <span>Vendido a precio de costo: <strong>{formatMoney(cuadre.ventas_al_costo ?? 0)}</strong></span>
                       <span>Utilidad bruta: <strong>{formatMoney(cuadre.utilidad_bruta)}</strong></span>
                     </div>
                   </div>
@@ -2417,6 +2418,14 @@
                       <span>Dividendos: <strong>{formatMoney(cuadre.dividendos)}</strong></span>
                       <span>Por socio ({cuadre.socios}): <strong>{formatMoney(cuadre.por_socio)}</strong></span>
                     </div>
+                    {#if cuadre.pago_por_socio && Object.keys(cuadre.pago_por_socio).length}
+                      <div class="report-meta">
+                        <span class="muted">Pago neto (su parte − lo que ya retiró):</span>
+                        {#each Object.entries(cuadre.pago_por_socio) as [socio, monto] (socio)}
+                          <span>{socio}: <strong>{formatMoney(monto)}</strong></span>
+                        {/each}
+                      </div>
+                    {/if}
                   </div>
 
                   <div class="report-card">

@@ -1,5 +1,4 @@
 import json
-from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from database import get_conn

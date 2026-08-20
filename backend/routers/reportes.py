@@ -204,6 +204,15 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
                 FROM venta_detalle vd JOIN ventas v ON vd.venta_id=v.id WHERE {cond_v}""",
             pv,
         ).fetchone()[0]
+        # "Ventas al costo" (celda R28 del Excel): importe cobrado por las líneas
+        # que se vendieron a precio de costo (sin ganancia). Se descuenta de la
+        # base de la estimulación porque no generaron margen.
+        ventas_al_costo = conn.execute(
+            f"""SELECT COALESCE(SUM(vd.subtotal),0)
+                FROM venta_detalle vd JOIN ventas v ON vd.venta_id=v.id
+                WHERE {cond_v} AND vd.precio_unitario <= vd.costo_unitario""",
+            pv,
+        ).fetchone()[0]
         consig_a_pagar = conn.execute(
             f"""SELECT COALESCE(SUM(vd.cantidad*vd.costo_unitario),0)
                 FROM venta_detalle vd JOIN ventas v ON vd.venta_id=v.id
@@ -301,19 +310,38 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         ).fetchall()
         transferencia_por_socio = {r[0]: r[1] for r in ts_rows}
 
+        # Retiros individuales por socio (gastos tipo 'individual'). El Excel los
+        # descuenta del pago de cada socio: I21 = por_socio − individual − transf.
+        ind_rows = conn.execute(
+            f"""SELECT COALESCE(NULLIF(socio,''),'(sin socio)') soc,
+                       COALESCE(SUM(monto),0) m
+                FROM gastos WHERE tipo='individual'{gc}
+                GROUP BY COALESCE(NULLIF(socio,''),'(sin socio)')""",
+            gp,
+        ).fetchall()
+        individual_por_socio = {r[0]: r[1] for r in ind_rows}
+
     # ── P&L ──────────────────────────────────────────────────────────────────
     # Pérdida de ganancia = descuentos capturados en ventas + ajuste manual opcional.
+    # `venta_total` es lo REALMENTE COBRADO (SUM de ventas.total), mientras que en
+    # el Excel la venta se valora a precio de lista y por eso allí se le resta la
+    # pérdida de ganancia para llegar a la venta real. Aquí ese descuento ya viene
+    # aplicado en el precio, así que restarlo otra vez lo contaría dos veces.
+    # `perdida_detalle` queda como indicador; solo el ajuste manual se descuenta.
     perdida_total = perdida_detalle + perdida_ganancia
-    venta_real = venta_total - perdida_total
+    venta_lista = venta_total + perdida_detalle - ganancia_elevacion  # equivalente a E18
+    venta_real = venta_total - perdida_ganancia
     utilidad_bruta = venta_real - venta_costo
     gastos_operativos = g_salarios + g_transporte
     onat_arrend = g_onat + g_arrend
-    # Estimulación: calculada automáticamente (reemplaza el gasto manual).
-    # 1% de (ventas totales − base fija − pérdida de ganancia − ventas al costo);
-    # nunca negativa. Equivale al 1% de la utilidad bruta por encima de la base.
+    # Estimulación — replica el bloque Q23:T29 del Excel:
+    #   R23 total ventas (a precio de lista) − R24 base − R26 pérdida de ganancia
+    #   − R28 "ventas costo" → ×1%
+    # Como (venta a lista − pérdida) es justamente lo cobrado, aquí se parte de
+    # `venta_real` y solo se descuentan la base y las ventas hechas al costo.
     ESTIM_BASE = 300000.0
     ESTIM_PCT = 0.01
-    estim_subtotal = venta_total - ESTIM_BASE - perdida_total - venta_costo
+    estim_subtotal = venta_real - ESTIM_BASE - ventas_al_costo
     g_estim = max(0.0, estim_subtotal * ESTIM_PCT)
     # "otros" entra a la utilidad neta: cualquier gasto registrado debe descontarse.
     utilidad_neta = (
@@ -322,6 +350,19 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
     reserva = utilidad_neta * reserva_pct / 100
     dividendos = utilidad_neta - reserva
     por_socio = dividendos / socios if socios else dividendos
+    # Pago neto a cada socio (I21/J21 del Excel): su parte de los dividendos menos
+    # lo que ya retiró en el período, sea como gasto individual o como
+    # transferencia a su nombre.
+    socios_nombres = set(individual_por_socio) | {
+        s for s in transferencia_por_socio if s != "general"
+    }
+    pago_por_socio = {
+        nombre: por_socio
+        - individual_por_socio.get(nombre, 0)
+        - transferencia_por_socio.get(nombre, 0)
+        for nombre in sorted(socios_nombres)
+        if nombre != "(sin socio)"
+    }
     # Efectivo en caja: entradas de efectivo (ventas + cobros) menos las salidas.
     efectivo_caja = (
         efectivo + ingresos_caja - extracciones - compras_merc - pagos_caja - deudas_pagadas
@@ -356,6 +397,12 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         "consignadores_a_pagar": consig_a_pagar,
         "faltante_sobrante": faltante_sobrante,
         "efectivo_caja": efectivo_caja,
+        # Equivalencias con el Excel: venta a precio de lista (E18), importe
+        # vendido al costo (R28) y pago neto a cada socio (I21/J21).
+        "venta_lista": venta_lista,
+        "ventas_al_costo": ventas_al_costo,
+        "pago_por_socio": pago_por_socio,
+        "individual_por_socio": individual_por_socio,
         "ganancia_elevacion": ganancia_elevacion,
         "venta_libreta": venta_libreta,
         "cobros_libreta": cobros_libreta,
