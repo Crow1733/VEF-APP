@@ -30,7 +30,20 @@ class FiltrosVenta(BaseModel):
     hasta: Optional[str] = None
 
 
-def _detalle_venta(conn, venta_id: int) -> dict:
+def _numero_del_dia(conn, venta_id: int) -> Optional[int]:
+    """Posición de la venta dentro de su propio día (1, 2, 3...). El `id` es
+    global y creciente, así que mostrarlo hacía ver "Venta #1382" cuando en la
+    jornada solo se habían hecho unas pocas. Se numera por orden de creación e
+    incluye las canceladas, para que el número de una venta no cambie después."""
+    return conn.execute(
+        """SELECT COUNT(*) FROM ventas
+           WHERE date(fecha) = (SELECT date(fecha) FROM ventas WHERE id=?)
+             AND id <= ?""",
+        (venta_id, venta_id),
+    ).fetchone()[0]
+
+
+def _detalle_venta(conn, venta_id: int, numero_dia: Optional[int] = None) -> dict:
     venta = conn.execute("SELECT * FROM ventas WHERE id=?", (venta_id,)).fetchone()
     if not venta:
         return None
@@ -51,6 +64,10 @@ def _detalle_venta(conn, venta_id: int) -> dict:
         result["caja_numero"] = caja_row["numero"] if caja_row else result["caja_id"]
     else:
         result["caja_numero"] = None
+    # Número correlativo dentro del día (se recibe ya calculado en los listados).
+    result["numero_dia"] = (
+        numero_dia if numero_dia is not None else _numero_del_dia(conn, venta_id)
+    )
     return result
 
 
@@ -74,7 +91,15 @@ def listar(caja_id: Optional[int] = None, estado: Optional[str] = None,
             params.append(hasta)
         query += " ORDER BY fecha DESC"
         ids = [r[0] for r in conn.execute(query, params).fetchall()]
-        return [_detalle_venta(conn, vid) for vid in ids]
+        # Numeración por día en una sola pasada (evita una consulta por venta).
+        numeros = {
+            r[0]: r[1]
+            for r in conn.execute(
+                "SELECT id, ROW_NUMBER() OVER (PARTITION BY date(fecha) ORDER BY id) "
+                "FROM ventas"
+            ).fetchall()
+        }
+        return [_detalle_venta(conn, vid, numeros.get(vid)) for vid in ids]
 
 
 @router.get("/{id}")

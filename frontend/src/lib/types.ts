@@ -40,7 +40,19 @@ export interface Producto {
   // Campos enriquecidos que añade el backend en GET /productos
   categoria_nombre?: string
   es_consignacion?: number
+  /** Total vendido desde que existe el producto (histórico). */
   vendidos?: number
+  // ── Semana en curso (desde el último cierre semanal) ──────────────────────
+  /** Existencia al arrancar la semana. */
+  inicial_semana?: number
+  vendidos_semana?: number
+  entradas_semana?: number
+  bajas_semana?: number
+  credito_semana?: number
+  /** Foto de stock del último cierre (referencia). */
+  snapshot_cierre?: number | null
+  /** Fecha de cierre que delimita la semana en curso. */
+  corte_semana?: string | null
 }
 
 export interface CajaCategoria {
@@ -117,6 +129,8 @@ export interface Venta {
   id: number | string
   caja_id: number | null
   caja_numero?: number | null
+  /** Número de la venta dentro de su día (reinicia cada jornada). */
+  numero_dia?: number
   fecha: string
   tipo_pago: string
   total: number

@@ -225,6 +225,7 @@
   let invFrom = $state('')
   let invTo = $state('')
   let invProducto = $state('')
+  let invCategoria = $state<string>('all')
   // Lista unificada entradas + bajas (más reciente primero) para el detalle.
   const invMovDetalle = $derived.by(() => {
     if (!invMovData) return [] as Array<Record<string, unknown>>
@@ -549,7 +550,12 @@
   // ── Bajas / Entradas ─────────────────────────────────────────────────────────
   async function loadInvMov() {
     const { desde, hasta } = rangoDe(invFilter, invRange)
-    invMovData = await api.reportes.inventarioMovimientos(desde, hasta, invProducto)
+    invMovData = await api.reportes.inventarioMovimientos(
+      desde,
+      hasta,
+      invProducto,
+      invCategoria === 'all' ? null : Number(invCategoria),
+    )
   }
   function applyInvRange() {
     if (invFrom && invTo) invRange = { from: invFrom, to: invTo }
@@ -585,6 +591,7 @@
     if (activeTab !== 'economia' || activeEconomia !== 'bajasentradas') return
     void invFilter
     void invRange
+    void invCategoria
     loadInvMov()
   })
 
@@ -1314,6 +1321,15 @@
                   <button type="button" class="btn" onclick={resetProductFilters}>Limpiar filtros</button>
                 </div>
               </div>
+              <p class="muted" style="margin: 0 0 8px;">
+                {#if productos[0]?.corte_semana}
+                  Las columnas de semana cuentan desde el último cierre
+                  (<strong>{formatDate(productos[0].corte_semana)}</strong>):
+                  inicial + entradas − vendido − bajas = total.
+                {:else}
+                  Aún no hay cierres semanales, así que las columnas de semana muestran todo el histórico.
+                {/if}
+              </p>
               {#if prodRangoActivo}
                 <p class="muted" style="margin: 0 0 8px;">
                   Mostrando lo vendido de cada producto entre <strong>{prodVentaDesde}</strong> y
@@ -1325,8 +1341,9 @@
                   <thead>
                     <tr>
                       <th>ID</th><th>Foto</th><th>Código</th><th>Nombre</th><th>Categoría</th>
-                      <th>Tipo</th><th>Costo</th><th>Venta</th><th>Ganancia</th><th>Inicial</th><th>Total</th>
-                      <th>Vendidos</th>
+                      <th>Tipo</th><th>Costo</th><th>Venta</th><th>Ganancia</th>
+                      <th>Inicial sem.</th><th>Entradas</th><th>Vendido sem.</th><th>Bajas</th><th>Total</th>
+                      <th>Vendido total</th>
                       {#if prodRangoActivo}<th>Vendido en rango</th>{/if}
                       <th>Acciones</th>
                     </tr>
@@ -1334,7 +1351,7 @@
                   <tbody>
                     {#if !filteredProducts.length}
                       <tr class="table-empty-row"
-                        ><td colspan={prodRangoActivo ? 14 : 13}><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr
+                        ><td colspan={prodRangoActivo ? 17 : 16}><div class="empty-state">No hay productos para el filtro seleccionado.</div></td></tr
                       >
                     {:else}
                       {#each filteredProducts as p (p.id)}
@@ -1356,9 +1373,12 @@
                           <td data-label="Costo">{formatMoney(p.costo)}</td>
                           <td data-label="Venta">{formatMoney(p.precio_venta)}</td>
                           <td data-label="Ganancia">{formatMoney(p.ganancia)}</td>
-                          <td data-label="Inicial">{p.stock_inicial}</td>
-                          <td data-label="Total">{p.stock_actual}</td>
-                          <td data-label="Vendidos">{p.vendidos}</td>
+                          <td data-label="Inicial sem.">{p.inicial_semana ?? p.stock_inicial}</td>
+                          <td data-label="Entradas" class="mov-in">{p.entradas_semana ? `+${p.entradas_semana}` : '—'}</td>
+                          <td data-label="Vendido sem."><strong>{p.vendidos_semana ?? 0}</strong></td>
+                          <td data-label="Bajas" class="mov-out">{p.bajas_semana ? `−${p.bajas_semana}` : '—'}</td>
+                          <td data-label="Total"><strong>{p.stock_actual}</strong></td>
+                          <td data-label="Vendido total" class="muted">{p.vendidos}</td>
                           {#if prodRangoActivo}
                             <td data-label="Vendido en rango"><strong>{ventasPorProducto[p.id] ?? 0}</strong></td>
                           {/if}
@@ -1659,7 +1679,8 @@
                       <div class="sale-card">
                         <div class="sale-card-top">
                           <div>
-                            <strong>Venta #{v.id}</strong>
+                            <strong>Venta #{v.numero_dia ?? v.id}</strong>
+                            <span class="muted small">· del día</span>
                             <div class="muted">{formatDateTime(v.fecha)}</div>
                           </div>
                           <div style="text-align:right;">
@@ -1783,7 +1804,7 @@
                   <label>Hasta<input type="date" bind:value={invTo} /></label>
                   <button class="btn" type="button" onclick={applyInvRange}>Aplicar</button>
                 </div>
-                <div class="filters-grid">
+                <div class="filters-grid product-filters">
                   <label class="search-filter">
                     Buscar producto (nombre o código)
                     <input
@@ -1792,6 +1813,15 @@
                       bind:value={invProducto}
                       oninput={loadInvMov}
                     />
+                  </label>
+                  <label>
+                    Categoría
+                    <select bind:value={invCategoria}>
+                      <option value="all">Todas</option>
+                      {#each sortedCategorias as c (c.id)}
+                        <option value={String(c.id)}>{c.nombre}</option>
+                      {/each}
+                    </select>
                   </label>
                 </div>
 
@@ -2613,7 +2643,7 @@
         <button class="modal-backdrop" aria-label="Cerrar" onclick={() => (saleModal = null)}></button>
         <div class="modal-card">
           <div class="modal-head">
-            <h3>Detalle venta #{saleModal.id}</h3>
+            <h3>Detalle venta #{saleModal.numero_dia ?? saleModal.id} del día</h3>
             <button class="btn" onclick={() => (saleModal = null)}>Cerrar</button>
           </div>
           <div class="modal-content">

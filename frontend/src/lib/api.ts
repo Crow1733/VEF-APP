@@ -357,9 +357,15 @@ const reportes = {
     netGet<ConsignacionReporte>('/reportes/consignaciones?' + reporteQS(desde, hasta, caja_id)),
   movimientosCaja: (desde?: string | null, hasta?: string | null, caja_id?: number | null) =>
     netGet<MovimientosCajaReporte>('/reportes/movimientos-caja?' + reporteQS(desde, hasta, caja_id)),
-  inventarioMovimientos: (desde?: string | null, hasta?: string | null, producto?: string) => {
+  inventarioMovimientos: (
+    desde?: string | null,
+    hasta?: string | null,
+    producto?: string,
+    categoria_id?: number | null,
+  ) => {
     const qs = new URLSearchParams(reporteQS(desde, hasta))
     if (producto && producto.trim()) qs.set('producto', producto.trim())
+    if (categoria_id != null) qs.set('categoria_id', String(categoria_id))
     return netGet<InventarioMovimientos>('/reportes/inventario-movimientos?' + qs)
   },
   cuadre: (desde?: string | null, hasta?: string | null, socios = 2, reserva_pct = 20) => {

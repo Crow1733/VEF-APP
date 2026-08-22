@@ -94,6 +94,20 @@ def cerrar(payload: CierrePayload):
     c = compute_cuadre(payload.desde, payload.hasta, payload.socios,
                        payload.reserva_pct, payload.perdida_ganancia)
     with get_conn() as conn:
+        # Un mismo período no puede cerrarse dos veces: duplicaba el snapshot de
+        # stock y dejaba el "inicial" de la semana siguiente indeterminado.
+        ya = conn.execute(
+            "SELECT id FROM cierres_semanales WHERE fecha_inicio=? AND fecha_fin=?",
+            (payload.desde, payload.hasta),
+        ).fetchone()
+        if ya:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Esta semana ya fue cerrada (cierre #{ya['id']}). "
+                    "Elimina ese cierre si necesitas volver a cerrarla."
+                ),
+            )
         cur = conn.execute(
             """INSERT INTO cierres_semanales
                (fecha_inicio, fecha_fin, venta_total, transferencia_total, efectivo_total,
@@ -111,11 +125,14 @@ def cerrar(payload: CierrePayload):
         )
         # Foto del stock al cierre: sirve como "stock inicial" de la semana siguiente
         # (el export lee el último snapshot con fecha <= desde para la columna F).
+        # Además se lleva stock_inicial a lo que quedó, de modo que la semana nueva
+        # arranque desde ahí y las cantidades no se acumulen desde el origen.
         for pr in conn.execute("SELECT id, stock_actual FROM productos").fetchall():
             conn.execute(
                 "INSERT INTO stock_snapshots (fecha, producto_id, stock) VALUES (?,?,?)",
                 (payload.hasta, pr["id"], pr["stock_actual"]),
             )
+        conn.execute("UPDATE productos SET stock_inicial = stock_actual")
         row = conn.execute("SELECT * FROM cierres_semanales WHERE id=?", (cur.lastrowid,)).fetchone()
     d = dict(row)
     d["cuadre"] = c
@@ -124,6 +141,20 @@ def cerrar(payload: CierrePayload):
 
 @router.delete("/{id}")
 def eliminar(id: int):
+    """Borra el cierre y la foto de stock que generó. Sin esto último el snapshot
+    quedaba huérfano y, al volver a cerrar la semana, dos fotos distintas de la
+    misma fecha dejaban indeterminado el stock inicial de la semana siguiente."""
     with get_conn() as conn:
+        cierre = conn.execute(
+            "SELECT fecha_fin FROM cierres_semanales WHERE id=?", (id,)
+        ).fetchone()
+        if not cierre:
+            raise HTTPException(status_code=404, detail="Cierre no encontrado")
         conn.execute("DELETE FROM cierres_semanales WHERE id=?", (id,))
+        # Solo se borra la foto si ningún otro cierre comparte esa fecha de fin.
+        otro = conn.execute(
+            "SELECT 1 FROM cierres_semanales WHERE fecha_fin=? LIMIT 1", (cierre["fecha_fin"],)
+        ).fetchone()
+        if not otro:
+            conn.execute("DELETE FROM stock_snapshots WHERE fecha=?", (cierre["fecha_fin"],))
     return {"ok": True}

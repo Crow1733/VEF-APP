@@ -489,25 +489,29 @@ def movimientos_caja(desde: Optional[str] = None, hasta: Optional[str] = None,
 
 @router.get("/inventario-movimientos")
 def inventario_movimientos(desde: Optional[str] = None, hasta: Optional[str] = None,
-                           producto: Optional[str] = None):
+                           producto: Optional[str] = None,
+                           categoria_id: Optional[int] = None):
     """Resumen + detalle de ENTRADAS (compras) y BAJAS (mermas) del rango,
-    valoradas al costo. `producto` filtra por nombre o código (búsqueda parcial).
-    Solo lectura."""
+    valoradas al costo. `producto` filtra por nombre o código (búsqueda parcial) y
+    `categoria_id` limita a una categoría. Solo lectura."""
     d1, d2 = _norm_dt(desde), _norm_dt(hasta)
     prod_q = (producto or "").strip()
 
     def clause(col):
         c, p = "", []
         if d1:
-            c += f" AND {col}>=?"
+            c += f" AND date({col})>=date(?)"
             p.append(d1)
         if d2:
-            c += f" AND {col}<=?"
+            c += f" AND date({col})<=date(?)"
             p.append(d2)
         if prod_q:
             c += " AND (p.nombre LIKE ? OR COALESCE(p.codigo,'') LIKE ?)"
             like = f"%{prod_q}%"
             p.extend([like, like])
+        if categoria_id is not None:
+            c += " AND p.categoria_id=?"
+            p.append(categoria_id)
         return c, p
 
     with get_conn() as conn:
