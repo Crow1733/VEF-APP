@@ -144,6 +144,8 @@ def crear(payload: ProductoPayload):
         raise HTTPException(status_code=422, detail="El precio de venta no puede ser negativo")
     if payload.costo < 0:
         raise HTTPException(status_code=422, detail="El costo no puede ser negativo")
+    if payload.stock_inicial < 0:
+        raise HTTPException(status_code=422, detail="El stock inicial no puede ser negativo")
     ganancia = payload.precio_venta - payload.costo
     stock = payload.stock_inicial
     with get_conn() as conn:
@@ -205,10 +207,40 @@ def actualizar(id: int, payload: ProductoPayload):
 
 @router.delete("/{id}")
 def eliminar(id: int):
+    """Elimina un producto. Si ya tiene ventas o créditos se rechaza, para no
+    romper el historial: en ese caso conviene desactivarlo (activa=0). Si solo
+    tiene movimientos de inventario (su entrada de alta, compras, bajas, fotos de
+    stock) se borran primero, porque referencian al producto por clave foránea y
+    sin eso el borrado fallaba con error 500."""
     with get_conn() as conn:
-        row = conn.execute("SELECT id FROM productos WHERE id=?", (id,)).fetchone()
+        row = conn.execute("SELECT nombre FROM productos WHERE id=?", (id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+        vendidos = conn.execute(
+            "SELECT COUNT(*) FROM venta_detalle WHERE producto_id=?", (id,)
+        ).fetchone()[0]
+        fiados = conn.execute(
+            "SELECT COUNT(*) FROM credito_detalle WHERE producto_id=?", (id,)
+        ).fetchone()[0]
+        if vendidos or fiados:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"'{row['nombre']}' tiene {vendidos} venta(s) y {fiados} crédito(s) "
+                    "registrados: no se puede eliminar sin perder ese historial. "
+                    "Edítalo y márcalo como inactivo si ya no se vende."
+                ),
+            )
+        # Movimientos de inventario que sí pueden acompañar al producto.
+        conn.execute("DELETE FROM compra_detalle WHERE producto_id=?", (id,))
+        conn.execute("DELETE FROM bajas WHERE producto_id=?", (id,))
+        conn.execute("DELETE FROM consignacion_detalle WHERE producto_id=?", (id,))
+        conn.execute("DELETE FROM stock_snapshots WHERE producto_id=?", (id,))
+        # Compras que quedaron sin ninguna línea tras lo anterior.
+        conn.execute(
+            "DELETE FROM compras WHERE id NOT IN (SELECT DISTINCT compra_id FROM compra_detalle)"
+        )
         conn.execute("DELETE FROM productos WHERE id=?", (id,))
     return {"ok": True}
 

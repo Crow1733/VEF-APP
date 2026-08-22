@@ -146,6 +146,18 @@ def registrar(payload: VentaPayload):
             if not prod:
                 continue
             cantidad = item.cantidad
+            # Una cantidad <= 0 sumaba existencias en lugar de restarlas y
+            # generaba una venta con importe negativo.
+            if cantidad <= 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"La cantidad de '{prod['nombre']}' debe ser mayor que cero",
+                )
+            if item.precio_unitario is not None and item.precio_unitario < 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"El precio de '{prod['nombre']}' no puede ser negativo",
+                )
             if prod["stock_actual"] < cantidad:
                 raise HTTPException(
                     status_code=422,

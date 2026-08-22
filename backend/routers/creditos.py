@@ -99,7 +99,6 @@ def registrar(payload: CreditoPayload):
         ).fetchone()
         caja_id = payload.caja_id or (caja_row["id"] if caja_row else None)
 
-        fecha_sql = "datetime('now')"
         base_cols = "(cliente, total, saldo, estado, observacion, caja_id, cajero_id, cajero_nombre"
         base_vals = [payload.cliente, 0, 0, "activa", payload.observacion, caja_id,
                      payload.cajero_id, payload.cajero_nombre]
@@ -123,6 +122,11 @@ def registrar(payload: CreditoPayload):
             if not prod:
                 continue
             cantidad = item.cantidad
+            if cantidad <= 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"La cantidad de '{prod['nombre']}' debe ser mayor que cero",
+                )
             # Misma validación que en una venta normal: sin esto se podía fiar
             # más mercancía de la existente y el stock quedaba en 0, perdiendo
             # el rastro de las unidades que nunca hubo.
