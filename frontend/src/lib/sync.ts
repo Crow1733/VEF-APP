@@ -25,14 +25,23 @@ let _syncing = false
 export async function processOutbox(): Promise<void> {
   if (_syncing) return
   _syncing = true
+  // Todo el cuerpo va dentro de try/finally: si algo lanzara, `_syncing` quedaría
+  // en true y la sincronización se bloquearía para siempre, dejando las ventas
+  // encoladas sin subir jamás.
+  try {
+    await _processOutbox()
+  } finally {
+    _syncing = false
+  }
+}
 
+async function _processOutbox(): Promise<void> {
   const todas = await db.getAllOutbox().catch(() => [])
   // Las rechazadas no se reintentan solas: esperan revisión.
   const ops = todas.filter((o) => !o.rechazada)
   const yaRechazadas = todas.length - ops.length
   if (!ops.length) {
     emit(yaRechazadas ? 'partial' : 'synced', { pending: 0, rechazadas: yaRechazadas })
-    _syncing = false
     return
   }
 
@@ -116,8 +125,6 @@ export async function processOutbox(): Promise<void> {
       }),
     )
   }
-
-  _syncing = false
 }
 
 let _started = false
