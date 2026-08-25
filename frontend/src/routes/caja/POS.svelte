@@ -47,6 +47,8 @@
   let payTransfer = $state('0')
   let payTotal = $state(0)
   let payError = $state('')
+  /** Cerrojo mientras se envía la venta: evita registrarla dos veces. */
+  let enviandoVenta = $state(false)
   let stockError = $state('')
   // Venta a crédito / libreta (fiado)
   let payCredito = $state(false)
@@ -249,32 +251,50 @@
       closePayment()
       return
     }
+    // Sin este cerrojo, un doble toque en "Confirmar venta" registraba la venta
+    // dos veces (el botón también queda deshabilitado mientras se envía).
+    if (enviandoVenta) return
+
     const items = pendingSale.items.map((i) => ({
       producto_id: i.producto_id,
       cantidad: i.cantidad,
       precio_unitario: i.precio_unitario,
     }))
-    if (payCredito) {
-      // Venta a crédito/libreta: requiere nombre de cliente, no requiere reparto.
-      if (!creditoCliente.trim()) {
-        payError = 'Indica el nombre del cliente para la venta a crédito.'
-        return
-      }
-      await api.creditos.registrar({ cliente: creditoCliente.trim(), items })
-    } else {
-      const cash = Number(payCash) || 0
-      const transfer = Number(payTransfer) || 0
+    if (payCredito && !creditoCliente.trim()) {
+      payError = 'Indica el nombre del cliente para la venta a crédito.'
+      return
+    }
+    const cash = Number(payCash) || 0
+    const transfer = Number(payTransfer) || 0
+    if (!payCredito) {
       const diff = Math.abs(roundMoney(cash + transfer - pendingSale.total))
       if (cash < 0 || transfer < 0 || diff > 0.01) {
         payError = 'Efectivo + transferencia debe coincidir con el total.'
         return
       }
-      await api.ventas.registrar({
-        items,
-        subtotal_efectivo: cash,
-        subtotal_transferencia: transfer,
-      })
     }
+
+    enviandoVenta = true
+    payError = ''
+    try {
+      if (payCredito) {
+        await api.creditos.registrar({ cliente: creditoCliente.trim(), items })
+      } else {
+        await api.ventas.registrar({
+          items,
+          subtotal_efectivo: cash,
+          subtotal_transferencia: transfer,
+        })
+      }
+    } catch (e) {
+      // Antes el fallo se propagaba sin avisar: el modal quedaba abierto, sin
+      // mensaje, y el cajero no sabía si la venta había quedado registrada.
+      payError = (e as Error).message || 'No se pudo registrar la venta. Intenta de nuevo.'
+      return
+    } finally {
+      enviandoVenta = false
+    }
+
     cart = []
     pendingSale = null
     closePayment()
@@ -589,9 +609,13 @@
       {/if}
       <div class="payment-error" role="alert">{payError}</div>
       <div class="footer-actions">
-        <button class="btn-ghost" type="button" onclick={closePayment}>Cancelar</button>
-        <button class="btn-primary" type="button" onclick={confirmPayment}>
-          {payCredito ? 'Registrar crédito' : 'Confirmar venta'}
+        <button class="btn-ghost" type="button" onclick={closePayment} disabled={enviandoVenta}>Cancelar</button>
+        <button class="btn-primary" type="button" onclick={confirmPayment} disabled={enviandoVenta}>
+          {#if enviandoVenta}
+            Registrando…
+          {:else}
+            {payCredito ? 'Registrar crédito' : 'Confirmar venta'}
+          {/if}
         </button>
       </div>
     </div>

@@ -240,6 +240,10 @@ export interface OutboxEntry {
   payload: unknown
   ts: number
   retries: number
+  /** El servidor la rechazó (p. ej. sin stock al sincronizar): NO se descarta. */
+  rechazada?: boolean
+  motivo?: string
+  rechazadaEn?: number
 }
 
 // ── Cuentas por pagar / deudas (Capa 5) ──────────────────────────────────────
@@ -405,6 +409,8 @@ export interface SyncState {
   status: SyncStatus
   pending: number
   synced: number
+  /** Operaciones que el servidor rechazó y quedaron guardadas para revisar. */
+  rechazadas?: number
 }
 
 // ── Reportes ────────────────────────────────────────────────────────────────

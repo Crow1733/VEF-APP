@@ -43,11 +43,16 @@ interface OutboxRow {
   id: number
   op: string
   payload: unknown
+  rechazada?: boolean
+  motivo?: string
+  rechazadaEn?: number
 }
 
 async function syncOutboxFromSW(): Promise<void> {
   const db = await openDB()
-  const ops = await getAllOutbox(db)
+  const todas = await getAllOutbox(db)
+  // Las ya rechazadas esperan revisión: no se reintentan ni se borran.
+  const ops = todas.filter((o) => !o.rechazada)
   if (!ops.length) return
 
   for (const op of ops) {
@@ -68,8 +73,16 @@ async function syncOutboxFromSW(): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(op.payload),
       })
-      if (res.ok || (res.status >= 400 && res.status < 500)) {
+      if (res.ok) {
         await delOutbox(db, op.id)
+      } else if (res.status >= 400 && res.status < 500) {
+        // Rechazada por el servidor: se conserva con el motivo en lugar de
+        // borrarla, para que la operación no desaparezca sin dejar rastro.
+        const motivo = await res
+          .json()
+          .then((b) => (b as { detail?: string }).detail)
+          .catch(() => null)
+        await marcarRechazada(db, op, motivo || `Rechazada (HTTP ${res.status})`)
       }
     } catch {
       // Sigue con la siguiente; la cola persiste.
@@ -107,6 +120,18 @@ function getAllOutbox(db: IDBDatabase): Promise<OutboxRow[]> {
 function delOutbox(db: IDBDatabase, id: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const r = db.transaction('outbox', 'readwrite').objectStore('outbox').delete(id)
+    r.onsuccess = () => resolve()
+    r.onerror = () => reject(r.error)
+  })
+}
+
+/** Guarda la operación marcada como rechazada, con el motivo, en vez de borrarla. */
+function marcarRechazada(db: IDBDatabase, op: OutboxRow, motivo: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const r = db
+      .transaction('outbox', 'readwrite')
+      .objectStore('outbox')
+      .put({ ...op, rechazada: true, motivo, rechazadaEn: Date.now() })
     r.onsuccess = () => resolve()
     r.onerror = () => reject(r.error)
   })

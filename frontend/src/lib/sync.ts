@@ -8,8 +8,16 @@ import { db } from './db'
 import { syncState } from './stores'
 import type { Producto, SyncStatus } from './types'
 
-function emit(status: SyncStatus, extra: { pending?: number; synced?: number } = {}) {
-  syncState.set({ status, pending: extra.pending ?? 0, synced: extra.synced ?? 0 })
+function emit(
+  status: SyncStatus,
+  extra: { pending?: number; synced?: number; rechazadas?: number } = {},
+) {
+  syncState.set({
+    status,
+    pending: extra.pending ?? 0,
+    synced: extra.synced ?? 0,
+    rechazadas: extra.rechazadas ?? 0,
+  })
 }
 
 let _syncing = false
@@ -18,16 +26,20 @@ export async function processOutbox(): Promise<void> {
   if (_syncing) return
   _syncing = true
 
-  const ops = await db.getAllOutbox().catch(() => [])
+  const todas = await db.getAllOutbox().catch(() => [])
+  // Las rechazadas no se reintentan solas: esperan revisión.
+  const ops = todas.filter((o) => !o.rechazada)
+  const yaRechazadas = todas.length - ops.length
   if (!ops.length) {
-    emit('synced', { pending: 0 })
+    emit(yaRechazadas ? 'partial' : 'synced', { pending: 0, rechazadas: yaRechazadas })
     _syncing = false
     return
   }
 
-  emit('syncing', { pending: ops.length })
+  emit('syncing', { pending: ops.length, rechazadas: yaRechazadas })
 
   let synced = 0
+  let rechazadasAhora = 0
   for (const op of ops) {
     try {
       let url: string
@@ -52,8 +64,17 @@ export async function processOutbox(): Promise<void> {
         if (op.id != null) await db.delOutbox(op.id)
         synced++
       } else if (res.status >= 400 && res.status < 500) {
-        // Op inválida (400/422/etc) — descartar
-        if (op.id != null) await db.delOutbox(op.id)
+        // El servidor la rechaza (p. ej. 422 por falta de stock). Antes se
+        // borraba en silencio y la operación desaparecía sin dejar rastro: si era
+        // una venta cobrada offline, se perdía. Ahora se conserva con el motivo
+        // para que alguien la revise.
+        const detalle = await res
+          .json()
+          .then((b) => (b as { detail?: string }).detail)
+          .catch(() => null)
+        const motivo = detalle || `El servidor la rechazó (HTTP ${res.status})`
+        if (op.id != null) await db.marcarOutboxRechazada(op.id, motivo)
+        rechazadasAhora++
       }
       // 5xx: dejar en cola, reintentar en el próximo ciclo
     } catch {
@@ -61,7 +82,11 @@ export async function processOutbox(): Promise<void> {
     }
   }
 
-  const remaining = await db.countOutbox().catch(() => 0)
+  const remaining = await db.countOutboxPendientes().catch(() => 0)
+  const rechazadasTotal = await db
+    .getOutboxRechazadas()
+    .then((r) => r.length)
+    .catch(() => 0)
 
   // Refresca productos desde el servidor para stock autoritativo
   if (synced > 0) {
@@ -73,10 +98,23 @@ export async function processOutbox(): Promise<void> {
     }
   }
 
-  emit(remaining === 0 ? 'synced' : 'partial', { pending: remaining, synced })
+  emit(remaining === 0 && rechazadasTotal === 0 ? 'synced' : 'partial', {
+    pending: remaining,
+    synced,
+    rechazadas: rechazadasTotal,
+  })
 
   if (synced > 0) {
     window.dispatchEvent(new CustomEvent('vef:sync-complete', { detail: { synced } }))
+  }
+  // Aviso explícito: hay operaciones que el servidor no aceptó y que alguien
+  // tiene que revisar (no se pierden, quedan guardadas con su motivo).
+  if (rechazadasAhora > 0) {
+    window.dispatchEvent(
+      new CustomEvent('vef:sync-rechazadas', {
+        detail: { rechazadas: rechazadasAhora, total: rechazadasTotal },
+      }),
+    )
   }
 
   _syncing = false

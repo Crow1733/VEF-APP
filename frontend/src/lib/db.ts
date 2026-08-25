@@ -120,6 +120,25 @@ class VefDB {
   async countOutbox(): Promise<number> {
     return this.count('outbox')
   }
+
+  /**
+   * Marca una operación como rechazada por el servidor (p. ej. stock insuficiente
+   * al sincronizar). Antes estas operaciones se borraban en silencio y la venta
+   * desaparecía sin que nadie se enterara; ahora quedan guardadas con el motivo
+   * para poder revisarlas.
+   */
+  async marcarOutboxRechazada(id: number, motivo: string): Promise<void> {
+    const entry = await this.get<OutboxEntry>('outbox', id)
+    if (!entry) return
+    await this.put('outbox', { ...entry, rechazada: true, motivo, rechazadaEn: Date.now() })
+  }
+  /** Operaciones rechazadas (requieren intervención) y pendientes de reintento. */
+  async getOutboxRechazadas(): Promise<OutboxEntry[]> {
+    return (await this.getAllOutbox()).filter((o) => o.rechazada)
+  }
+  async countOutboxPendientes(): Promise<number> {
+    return (await this.getAllOutbox()).filter((o) => !o.rechazada).length
+  }
 }
 
 export const db = new VefDB()

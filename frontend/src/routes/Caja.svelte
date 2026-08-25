@@ -48,13 +48,29 @@
   })
 
   const badge = $derived.by(() => {
-    const { status, pending } = $syncState
+    const { status, pending, rechazadas = 0 } = $syncState
     let label = '⬤ Online'
     if (status === 'syncing') label = `↻ Sincronizando (${pending})`
     else if (status === 'offline') label = pending > 0 ? `⬤ Sin conexión (${pending})` : '⬤ Sin conexión'
     else if (status === 'partial') label = `⚠ ${pending} pendiente${pending !== 1 ? 's' : ''}`
+    // Las operaciones que el servidor rechazó se avisan aparte: no se perdieron,
+    // pero tampoco entraron, así que alguien tiene que mirarlas.
+    if (rechazadas > 0) label += ` · ✖ ${rechazadas} rechazada${rechazadas !== 1 ? 's' : ''}`
     const cls = 'status-' + (status === 'online' ? 'synced' : status)
     return { label, cls }
+  })
+
+  // Aviso inmediato cuando el servidor rechaza operaciones al sincronizar.
+  let avisoRechazadas = $state('')
+  onMount(() => {
+    const onRechazadas = (e: Event) => {
+      const { rechazadas } = (e as CustomEvent<{ rechazadas: number }>).detail
+      avisoRechazadas =
+        `El servidor rechazó ${rechazadas} operación(es) al sincronizar (por ejemplo, por falta de ` +
+        `stock). Quedaron guardadas con su motivo: revísalas antes de que se pierdan de vista.`
+    }
+    window.addEventListener('vef:sync-rechazadas', onRechazadas)
+    return () => window.removeEventListener('vef:sync-rechazadas', onRechazadas)
   })
 
   const TABS: { id: View; label: string }[] = [
@@ -76,6 +92,13 @@
       <span class="sync-badge {badge.cls}" title="Estado de sincronización">{badge.label}</span>
       <button class="nav-tab logout" type="button" onclick={logout}>Cerrar sesión</button>
     </div>
+
+    {#if avisoRechazadas}
+      <div class="aviso-rechazadas" role="alert">
+        <span>{avisoRechazadas}</span>
+        <button type="button" onclick={() => (avisoRechazadas = '')}>Entendido</button>
+      </div>
+    {/if}
 
     {#if view === 'pos'}
       <POS />
@@ -114,6 +137,31 @@
     border-bottom: 1px solid var(--border);
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
     animation: slideDown var(--duration-base) var(--ease-soft);
+  }
+
+  .aviso-rechazadas {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    padding: 12px 16px;
+    border: 1px solid #f87171;
+    background: #fef2f2;
+    color: #991b1b;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .aviso-rechazadas button {
+    border: 1px solid #f87171;
+    background: #fff;
+    color: #991b1b;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font: inherit;
+    cursor: pointer;
   }
 
   .sync-badge {
