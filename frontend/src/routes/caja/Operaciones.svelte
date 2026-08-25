@@ -193,7 +193,7 @@
               <article class="sale-card">
                 <div class="sale-card-header">
                   <div>
-                    <strong>Venta #{v.id}</strong>
+                    <strong>Venta #{v.numero_dia ?? v.id}</strong>
                     <span class="muted">{formatDateTime(v.fecha)}</span>
                   </div>
                   <span class="pill">${money(v.total)}</span>
@@ -227,7 +227,7 @@
               <article class="sale-card">
                 <div class="sale-card-header">
                   <div>
-                    <strong>Venta #{v.id}</strong>
+                    <strong>Venta #{v.numero_dia ?? v.id}</strong>
                     <span class="muted">{formatDateTime(v.fecha)}</span>
                   </div>
                   <span class="pill danger">${money(v.total)}</span>
@@ -374,7 +374,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <div>
-          <h2>Venta #{sale.id}</h2>
+          <h2>Venta #{sale.numero_dia ?? sale.id}</h2>
           <p class="muted">{formatDateTime(sale.fecha)} · Total ${money(sale.total)}</p>
         </div>
         <button class="btn-outline" type="button" onclick={() => (saleModal = null)}>Cerrar</button>
