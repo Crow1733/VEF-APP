@@ -13,6 +13,9 @@ class ExtraccionPayload(BaseModel):
     caja_id: Optional[int] = None
     cajero_id: Optional[int] = None
     cajero_nombre: Optional[str] = None
+    # Extracción normal anotada a nombre de un consignador: al liquidarle la
+    # semana se le descuenta lo que ya se llevó.
+    consignador: Optional[str] = None
 
 
 class PagoPayload(BaseModel):
@@ -55,15 +58,16 @@ def registrar_extraccion(payload: ExtraccionPayload):
         caja_id = _resolve_caja_abierta(conn, payload.caja_id)
         if not caja_id:
             return {"ok": False, "reason": "sin_caja_abierta"}
+        consignador = (payload.consignador or "").strip() or None
         cur = conn.execute(
             """INSERT INTO movimientos_caja
                (caja_id, tipo_movimiento, concepto, monto, metodo_pago,
                 es_extraccion, es_compra_mercancia, responsable,
-                cajero_id, cajero_nombre)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                cajero_id, cajero_nombre, consignador)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (caja_id, "extraccion", payload.concepto, payload.monto,
              "efectivo", 1, 0, payload.responsable,
-             payload.cajero_id, payload.cajero_nombre),
+             payload.cajero_id, payload.cajero_nombre, consignador),
         )
         row = conn.execute("SELECT * FROM movimientos_caja WHERE id=?", (cur.lastrowid,)).fetchone()
     return {"ok": True, "mov": dict(row)}

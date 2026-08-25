@@ -1,3 +1,4 @@
+from datetime import date as _date
 from typing import Optional
 from fastapi import APIRouter
 from database import get_conn
@@ -130,6 +131,11 @@ def consignaciones(desde: Optional[str] = None, hasta: Optional[str] = None,
     """Liquidación por consignador (equivale a 'IMPORTE AL COSTO' de los ledgers
     Jesus/CUSCO/Sucel…): por cada consignador, lo vendido de sus productos en el
     rango y cuánto se le debe pagar = Σ(cantidad × costo).
+
+    Si durante la semana se le fue entregando dinero (extracciones de caja
+    registradas a su nombre), eso se descuenta: lo que queda por entregarle al
+    cierre es `neto_a_pagar`. Un `neto` negativo significa que se le entregó de
+    más y arrastra saldo a favor del bazar.
     """
     cond_v, params_v = _where_ventas(caja_id, desde, hasta)
     query = f"""
@@ -144,19 +150,60 @@ def consignaciones(desde: Optional[str] = None, hasta: Optional[str] = None,
         GROUP BY consignador
         ORDER BY a_pagar DESC
     """
+    # Dinero ya entregado en el mismo rango, por consignador.
+    cond_m, params_m = _where_movs(caja_id, desde, hasta)
+    query_adel = f"""
+        SELECT TRIM(consignador) AS consignador,
+               COALESCE(SUM(monto), 0) AS adelantos,
+               COUNT(*)                AS num_adelantos
+        FROM movimientos_caja
+        WHERE {cond_m} AND es_extraccion=1
+          AND consignador IS NOT NULL AND TRIM(consignador) <> ''
+        GROUP BY TRIM(consignador)
+    """
+
     with get_conn() as conn:
         rows = conn.execute(query, params_v).fetchall()
+        adel = {
+            r["consignador"]: {"adelantos": r["adelantos"], "num": r["num_adelantos"]}
+            for r in conn.execute(query_adel, params_m).fetchall()
+        }
 
     consignadores = []
-    total = {"unidades": 0, "a_pagar": 0.0, "venta": 0.0, "utilidad_bazar": 0.0}
+    total = {"unidades": 0, "a_pagar": 0.0, "venta": 0.0, "utilidad_bazar": 0.0,
+             "adelantos": 0.0, "neto_a_pagar": 0.0}
+    vistos = set()
     for r in rows:
         d = dict(r)
+        a = adel.get(d["consignador"], {})
         d["utilidad_bazar"] = d["venta"] - d["a_pagar"]
+        d["adelantos"] = a.get("adelantos", 0.0)
+        d["num_adelantos"] = a.get("num", 0)
+        d["neto_a_pagar"] = d["a_pagar"] - d["adelantos"]
+        vistos.add(d["consignador"])
         consignadores.append(d)
+
+    # Consignadores a los que se les entregó dinero pero no se les vendió nada
+    # en el rango: sin esto la entrega desaparecía del reporte y parecía que no
+    # se les había dado nada.
+    for nombre, a in adel.items():
+        if nombre in vistos:
+            continue
+        consignadores.append({
+            "consignador": nombre, "unidades": 0, "a_pagar": 0.0, "venta": 0.0,
+            "utilidad_bazar": 0.0, "adelantos": a["adelantos"],
+            "num_adelantos": a["num"], "neto_a_pagar": -a["adelantos"],
+        })
+
+    for d in consignadores:
         total["unidades"] += d["unidades"]
         total["a_pagar"] += d["a_pagar"]
         total["venta"] += d["venta"]
         total["utilidad_bazar"] += d["utilidad_bazar"]
+        total["adelantos"] += d["adelantos"]
+        total["neto_a_pagar"] += d["neto_a_pagar"]
+
+    consignadores.sort(key=lambda d: d["a_pagar"], reverse=True)
     return {"consignadores": consignadores, "total": total}
 
 
@@ -368,6 +415,221 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         efectivo + ingresos_caja - extracciones - compras_merc - pagos_caja - deudas_pagadas
     )
 
+    # ── Bloques que replican la hoja "CUADRE DE LA SEMANA" del Excel ─────────
+    # Se calculan aparte del P&L para que el apartado del cuadre pueda mostrar
+    # los mismos campos que la hoja, con los mismos nombres y en el mismo orden.
+    DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+    def _por_dia(sql, params):
+        return {r[0]: r[1] for r in conn.execute(sql, params).fetchall()}
+
+    with get_conn() as conn:
+        # Tabla diaria (columnas A7:Q17 de la hoja).
+        v_dia = {
+            r["d"]: dict(r)
+            for r in conn.execute(
+                f"""SELECT substr(v.fecha,1,10) AS d,
+                           COALESCE(SUM(v.total),0)                  AS venta,
+                           COALESCE(SUM(v.subtotal_efectivo),0)      AS efectivo,
+                           COALESCE(SUM(v.subtotal_transferencia),0) AS transferencia
+                    FROM ventas v WHERE {cond_v} GROUP BY d""",
+                pv,
+            ).fetchall()
+        }
+        pg_dia = _por_dia(
+            f"""SELECT substr(v.fecha,1,10),
+                       COALESCE(SUM(vd.perdida_ganancia),0)
+                FROM venta_detalle vd JOIN ventas v ON vd.venta_id=v.id
+                WHERE {cond_v} GROUP BY 1""", pv)
+        ge_dia = _por_dia(
+            f"""SELECT substr(v.fecha,1,10),
+                       COALESCE(SUM(vd.ganancia_elevacion),0)
+                FROM venta_detalle vd JOIN ventas v ON vd.venta_id=v.id
+                WHERE {cond_v} GROUP BY 1""", pv)
+        # Transferencias a nombre de un socio (columna "Transferencia jesus").
+        tsoc_dia = {}
+        for r in conn.execute(
+            f"""SELECT substr(v.fecha,1,10) d,
+                       COALESCE(NULLIF(v.transferencia_socio,''),'general') soc,
+                       COALESCE(SUM(v.subtotal_transferencia),0) m
+                FROM ventas v WHERE {cond_v} GROUP BY d, soc""", pv).fetchall():
+            tsoc_dia.setdefault(r["d"], {})[r["soc"]] = r["m"]
+
+        def _gasto_dia(tipo):
+            return _por_dia(
+                f"""SELECT substr(fecha,1,10), COALESCE(SUM(monto),0)
+                    FROM gastos WHERE tipo=?{gc} GROUP BY 1""", [tipo, *gp])
+
+        sal_dia, tra_dia = _gasto_dia("salario"), _gasto_dia("transporte")
+        # Gastos individuales por socio (columnas "Jesus" / "Enrique").
+        ind_dia = {}
+        for r in conn.execute(
+            f"""SELECT substr(fecha,1,10) d, COALESCE(NULLIF(socio,''),'(sin socio)') soc,
+                       COALESCE(SUM(monto),0) m
+                FROM gastos WHERE tipo='individual'{gc} GROUP BY d, soc""", gp).fetchall():
+            ind_dia.setdefault(r["d"], {})[r["soc"]] = r["m"]
+
+        pag_dia = _por_dia(
+            f"""SELECT substr(fecha,1,10), COALESCE(SUM(monto),0)
+                FROM movimientos_caja
+                WHERE {cond_m} AND tipo_movimiento='pago'
+                  AND es_extraccion=0 AND es_compra_mercancia=0
+                GROUP BY 1""", pm)
+        ext_dia = _por_dia(
+            f"""SELECT substr(fecha,1,10), COALESCE(SUM(monto),0)
+                FROM movimientos_caja WHERE {cond_m} AND es_extraccion=1
+                GROUP BY 1""", pm)
+        lib_dia = _por_dia(
+            f"""SELECT substr(fecha,1,10), COALESCE(SUM(total),0)
+                FROM creditos WHERE 1=1{dc} GROUP BY 1""", dp)
+        # Faltante / sobrante del día, por las cajas cerradas esa fecha.
+        dif_dia = _por_dia(
+            f"""SELECT substr(fecha_cierre,1,10), COALESCE(SUM(diferencia),0)
+                FROM cajas WHERE estado='cerrada'{fc} GROUP BY 1""", fp)
+
+        # Entradas de mercancía por categoría (bloque "Desglose Entradas del Bazar").
+        entradas_cat = [
+            dict(r) for r in conn.execute(
+                f"""SELECT cat.nombre AS categoria,
+                           COALESCE(SUM(cd.subtotal),0) AS valor
+                    FROM compra_detalle cd
+                    JOIN compras c   ON cd.compra_id=c.id
+                    JOIN productos p ON cd.producto_id=p.id
+                    JOIN categorias cat ON p.categoria_id=cat.id
+                    WHERE 1=1{cc}
+                    GROUP BY cat.nombre HAVING valor <> 0
+                    ORDER BY valor DESC""", cp).fetchall()
+        ]
+        # Inventario actual valorado al costo, por categoría ("TOTAL EFECTIVO BAZAR").
+        inventario_cat = [
+            dict(r) for r in conn.execute(
+                """SELECT cat.nombre AS categoria,
+                          COALESCE(SUM(p.stock_actual * p.costo),0) AS valor
+                   FROM productos p JOIN categorias cat ON p.categoria_id=cat.id
+                   WHERE p.activa=1
+                   GROUP BY cat.nombre HAVING valor <> 0
+                   ORDER BY valor DESC"""
+            ).fetchall()
+        ]
+        # Liquidación por consignador, ya neta de lo que se le entregó.
+        consig_rows = [
+            dict(r) for r in conn.execute(
+                f"""SELECT COALESCE(NULLIF(TRIM(p.consignador),''),'Sin consignador') AS consignador,
+                           COALESCE(SUM(vd.cantidad*vd.costo_unitario),0) AS a_pagar
+                    FROM venta_detalle vd
+                    JOIN ventas v ON vd.venta_id=v.id
+                    JOIN productos p ON vd.producto_id=p.id
+                    WHERE {cond_v} AND p.tipo_producto='consignacion'
+                    GROUP BY consignador ORDER BY a_pagar DESC""", pv).fetchall()
+        ]
+        entregado_consig = {
+            r[0]: r[1] for r in conn.execute(
+                f"""SELECT TRIM(consignador), COALESCE(SUM(monto),0)
+                    FROM movimientos_caja
+                    WHERE {cond_m} AND es_extraccion=1
+                      AND consignador IS NOT NULL AND TRIM(consignador) <> ''
+                    GROUP BY TRIM(consignador)""", pm).fetchall()
+        }
+        cuentas_por_pagar = conn.execute(
+            "SELECT COALESCE(SUM(COALESCE(saldo, monto)),0) FROM cuentas_por_pagar "
+            "WHERE COALESCE(estado,'') <> 'pagada'"
+        ).fetchone()[0]
+        # Inventario al inicio del período: la foto de stock más reciente
+        # tomada antes de `desde`. Si no hay ninguna, se deja en None para no
+        # inventar un número que descuadre el bloque.
+        inicio_semana = None
+        if desde:
+            snap = conn.execute(
+                """SELECT COALESCE(SUM(s.stock * p.costo),0)
+                   FROM stock_snapshots s JOIN productos p ON s.producto_id=p.id
+                   WHERE s.fecha = (SELECT MAX(fecha) FROM stock_snapshots
+                                    WHERE date(fecha) <= date(?))""",
+                (_norm_dt(desde),),
+            ).fetchone()
+            inicio_semana = snap[0] if snap and snap[0] else None
+
+    # Armado de la tabla diaria
+    dias_tabla = []
+    for d in sorted(set(v_dia) | set(sal_dia) | set(tra_dia) | set(pag_dia) | set(ind_dia)):
+        v = v_dia.get(d, {})
+        venta_cobrada = v.get("venta", 0.0)
+        pg, gelev = pg_dia.get(d, 0.0), ge_dia.get(d, 0.0)
+        transf = v.get("transferencia", 0.0)
+        sal, tra, pag = sal_dia.get(d, 0.0), tra_dia.get(d, 0.0), pag_dia.get(d, 0.0)
+        ind = ind_dia.get(d, {})
+        ind_total = sum(ind.values())
+        dif = dif_dia.get(d, 0.0)
+        try:
+            nombre = DIAS_ES[_date.fromisoformat(d).weekday()]
+        except ValueError:
+            nombre = ""
+        dias_tabla.append({
+            "dia": nombre, "fecha": d,
+            # "Venta diaria" del Excel va a precio de lista; la nuestra es lo
+            # cobrado, así que se le devuelve el descuento y se le quita el
+            # sobreprecio para que las dos columnas signifiquen lo mismo.
+            "venta_diaria": venta_cobrada + pg - gelev,
+            "venta_cobrada": venta_cobrada,
+            "transferencia": transf,
+            "transferencia_socio": tsoc_dia.get(d, {}),
+            "salarios": sal, "transporte": tra, "pagos_caja": pag,
+            "individual": ind, "individual_total": ind_total,
+            "extracciones": ext_dia.get(d, 0.0),
+            "faltante": -dif if dif < 0 else 0.0,
+            "sobrante": dif if dif > 0 else 0.0,
+            "perdida_ganancia": pg, "ganancia_elevacion": gelev,
+            # Columna EFECTIVO (O) de la hoja: lo cobrado menos lo que no entró
+            # al cajón (transferencias) y lo que salió de él ese día.
+            "efectivo": venta_cobrada - transf - sal - tra - pag - ind_total,
+            "venta_libreta": lib_dia.get(d, 0.0),
+        })
+
+    # Bloque de la estimulación (Q23:T29 de la hoja), paso a paso.
+    estimulacion = {
+        "total_ventas": venta_lista,
+        "base": ESTIM_BASE,
+        "sub_base": venta_lista - ESTIM_BASE,
+        "perdida_ganancia": perdida_detalle,
+        "sub_perdida": venta_lista - ESTIM_BASE - perdida_detalle,
+        "ventas_costo": ventas_al_costo,
+        "base_final": estim_subtotal,
+        "pct": ESTIM_PCT * 100,
+        "importe": g_estim,
+        "entre_4": g_estim / 4,
+    }
+
+    # Distribución del efectivo (bloque "Desglose Semanal", E35:G54).
+    consig_desglose = []
+    for r in consig_rows:
+        ent = entregado_consig.get(r["consignador"], 0.0)
+        consig_desglose.append({
+            "consignador": r["consignador"], "a_pagar": r["a_pagar"],
+            "entregado": ent, "neto": r["a_pagar"] - ent,
+        })
+    salidas_desglose = (
+        sum(c["neto"] for c in consig_desglose) + cuentas_por_pagar + reserva
+        + onat_arrend + g_estim + sum(pago_por_socio.values())
+    )
+    desglose_semanal = {
+        "importe_efectivo": efectivo_caja,
+        "consignadores": consig_desglose,
+        "cuentas_por_pagar": cuentas_por_pagar,
+        "reserva": reserva, "reserva_pct": reserva_pct,
+        "onat_arrendamiento": onat_arrend,
+        "estimulacion": g_estim,
+        "pago_por_socio": pago_por_socio,
+        "total_bazar": efectivo_caja - salidas_desglose,
+    }
+
+    cuadre_especial = {
+        "inicio_semana": inicio_semana,
+        "entradas_semana": entradas_costo,
+        "total_semana": (inicio_semana + entradas_costo) if inicio_semana is not None else None,
+        "entradas_por_categoria": entradas_cat,
+        "inventario_por_categoria": inventario_cat,
+        "inventario_total": sum(c["valor"] for c in inventario_cat),
+    }
+
     return {
         "desde": desde, "hasta": hasta,
         "venta_total": venta_total, "efectivo": efectivo, "transferencia": transferencia,
@@ -409,6 +671,11 @@ def compute_cuadre(desde: Optional[str] = None, hasta: Optional[str] = None,
         "bajas_total": bajas_total,
         "entradas_costo": entradas_costo,
         "transferencia_por_socio": transferencia_por_socio,
+        # Bloques con la misma estructura que la hoja "CUADRE DE LA SEMANA".
+        "dias": dias_tabla,
+        "estimulacion": estimulacion,
+        "desglose_semanal": desglose_semanal,
+        "cuadre_especial": cuadre_especial,
     }
 
 

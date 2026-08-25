@@ -34,6 +34,10 @@
   let wAmount = $state<number | null>(null)
   let wNote = $state('')
   let wError = $state('')
+  // Extracción normal, pero anotada a nombre de un consignador: sale igual de
+  // la caja y además se le descuenta de lo que se le liquide al final de semana.
+  let wANombre = $state(false)
+  let wConsignador = $state('')
 
   // Bajas / mermas
   let bajasList = $state<Baja[]>([])
@@ -43,6 +47,13 @@
   let bRazon = $state('merma')
   let bNota = $state('')
   let bError = $state('')
+
+  const consignadores = $derived.by(() => {
+    const nombres = productos
+      .filter((p) => p.tipo_producto === 'consignacion' && p.consignador?.trim())
+      .map((p) => p.consignador!.trim())
+    return [...new Set(nombres)].sort((a, b) => a.localeCompare(b, 'es'))
+  })
 
   async function refresh() {
     const wc = $workingCaja
@@ -127,11 +138,17 @@
       wError = "No hay caja seleccionada. Ve a 'Caja actual'."
       return
     }
+    const consignador = wANombre ? wConsignador.trim() : ''
+    if (wANombre && !consignador) {
+      wError = 'Elige a nombre de qué consignador se registra la extracción.'
+      return
+    }
     const s = get(session)
     const res = await api.movimientos.registrarExtraccion({
       monto: amount,
       concepto: wNote.trim() || 'Extracción de caja',
       responsable: s?.displayName || s?.username || null,
+      consignador: consignador || null,
     })
     if (!res.ok) {
       wError = 'No se pudo registrar la extracción.'
@@ -139,6 +156,8 @@
     }
     wAmount = null
     wNote = ''
+    wANombre = false
+    wConsignador = ''
     wError = ''
     await refresh()
   }
@@ -265,6 +284,30 @@
               Motivo (opcional)
               <input class="edit-input" type="text" maxlength="120" placeholder="Ej: retiro propietario" bind:value={wNote} />
             </label>
+            <label class="check-line">
+              <input type="checkbox" bind:checked={wANombre} disabled={!consignadores.length} />
+              <span>
+                Registrarla a nombre de un consignador
+                {#if !consignadores.length}
+                  <small class="muted">(no hay productos en consignación con dueño asignado)</small>
+                {/if}
+              </span>
+            </label>
+            {#if wANombre}
+              <label>
+                Consignador
+                <select class="edit-input" bind:value={wConsignador}>
+                  <option value="">Selecciona…</option>
+                  {#each consignadores as c (c)}
+                    <option value={c}>{c}</option>
+                  {/each}
+                </select>
+                <small class="muted">
+                  Sale de la caja igual que cualquier extracción; además se le
+                  descuenta de lo que se le liquide al final de la semana.
+                </small>
+              </label>
+            {/if}
             <div class="withdrawal-actions">
               <button class="btn-primary" type="submit">Registrar extracción</button>
             </div>
@@ -288,6 +331,9 @@
                     <span class="pill">${money(m.monto)}</span>
                   </div>
                   <div class="muted">{m.concepto}</div>
+                  {#if m.consignador}
+                    <span class="badge-consignador">A nombre de {m.consignador}</span>
+                  {/if}
                 </article>
               {/each}
             {/if}
@@ -613,6 +659,39 @@
     gap: 6px;
     font-weight: 600;
     font-size: 14px;
+  }
+  /* La casilla va en línea, no en la cuadrícula de labels del formulario. */
+  .withdrawal-form label.check-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .withdrawal-form label.check-line input {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    accent-color: var(--primary);
+  }
+  .withdrawal-form small.muted {
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .badge-consignador {
+    display: inline-block;
+    /* .sale-card es una cuadrícula: sin esto la etiqueta se estiraba a lo ancho. */
+    justify-self: start;
+    width: fit-content;
+    margin-top: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(244, 180, 0, 0.18);
+    color: var(--primary-strong, #d48a00);
+    border: 1px solid rgba(244, 180, 0, 0.3);
   }
   .withdrawal-actions {
     display: flex;

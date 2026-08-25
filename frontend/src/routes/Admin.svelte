@@ -200,6 +200,26 @@
 
   // ── Cuadre / cierre semanal ─────────────────────────────────────────────────
   let cuadre = $state<CuadreReporte | null>(null)
+
+  /** Fila TOTAL de la tabla diaria del cuadre (fila 17 de la hoja). */
+  const cuadreTotalDias = $derived.by(() => {
+    const z = { venta: 0, transf: 0, sal: 0, tra: 0, pag: 0, ind: 0, falt: 0, pg: 0, ge: 0, sob: 0, efe: 0, lib: 0 }
+    for (const d of cuadre?.dias ?? []) {
+      z.venta += d.venta_diaria
+      z.transf += d.transferencia
+      z.sal += d.salarios
+      z.tra += d.transporte
+      z.pag += d.pagos_caja
+      z.ind += d.individual_total
+      z.falt += d.faltante
+      z.pg += d.perdida_ganancia
+      z.ge += d.ganancia_elevacion
+      z.sob += d.sobrante
+      z.efe += d.efectivo
+      z.lib += d.venta_libreta
+    }
+    return z
+  })
   let cuadreFilter = $state<'week' | 'month' | 'all'>('week')
   let cuadreRange = $state<{ from: string; to: string } | null>(null)
   let cuadreFrom = $state('')
@@ -2216,18 +2236,33 @@
                     <thead>
                       <tr>
                         <th>Consignador</th><th>Unidades</th><th>A pagar (costo)</th>
+                        <th>Ya entregado</th><th>Neto a entregar</th>
                         <th>Venta</th><th>Utilidad bazar</th>
                       </tr>
                     </thead>
                     <tbody>
                       {#if !consigData || !consigData.consignadores.length}
-                        <tr class="table-empty-row"><td colspan="5"><div class="empty-state">Sin ventas de consignación en este período.</div></td></tr>
+                        <tr class="table-empty-row"><td colspan="7"><div class="empty-state">Sin ventas de consignación en este período.</div></td></tr>
                       {:else}
                         {#each consigData.consignadores as r (r.consignador)}
                           <tr>
                             <td data-label="Consignador">{r.consignador}</td>
                             <td data-label="Unidades">{r.unidades}</td>
                             <td data-label="A pagar (costo)">{formatMoney(r.a_pagar)}</td>
+                            <td data-label="Ya entregado">
+                              {#if r.adelantos}
+                                <span class="report-delta exit">−{formatMoney(r.adelantos)}</span>
+                                <small class="muted">({r.num_adelantos})</small>
+                              {:else}—{/if}
+                            </td>
+                            <td data-label="Neto a entregar">
+                              <strong class={r.neto_a_pagar < 0 ? 'report-delta exit' : ''}>
+                                {formatMoney(r.neto_a_pagar)}
+                              </strong>
+                              {#if r.neto_a_pagar < 0}
+                                <small class="muted">se le entregó de más</small>
+                              {/if}
+                            </td>
                             <td data-label="Venta">{formatMoney(r.venta)}</td>
                             <td data-label="Utilidad bazar">{formatMoney(r.utilidad_bazar)}</td>
                           </tr>
@@ -2236,6 +2271,8 @@
                           <td data-label="Consignador"><strong>TOTAL</strong></td>
                           <td data-label="Unidades"><strong>{consigData.total.unidades}</strong></td>
                           <td data-label="A pagar (costo)"><strong>{formatMoney(consigData.total.a_pagar)}</strong></td>
+                          <td data-label="Ya entregado"><strong>{formatMoney(consigData.total.adelantos)}</strong></td>
+                          <td data-label="Neto a entregar"><strong>{formatMoney(consigData.total.neto_a_pagar)}</strong></td>
                           <td data-label="Venta"><strong>{formatMoney(consigData.total.venta)}</strong></td>
                           <td data-label="Utilidad bazar"><strong>{formatMoney(consigData.total.utilidad_bazar)}</strong></td>
                         </tr>
@@ -2401,63 +2438,297 @@
               </article>
 
               {#if cuadre}
+                <!-- Bloque principal: mismas filas y nombres que la hoja
+                     "CUADRE DE LA SEMANA" del Excel (A18:E30). -->
                 <article class="panel-card">
-                  <h2>Resultado</h2>
+                  <h2>Cuadre de la semana</h2>
+                  <div class="table-wrap">
+                    <table class="cuadre-pl">
+                      <tbody>
+                        <tr>
+                          <td>Total de Venta Semanal por Sistema</td>
+                          <td class="num">{formatMoney(cuadre.venta_lista ?? cuadre.venta_total)}</td>
+                        </tr>
+                        <tr>
+                          <td>Pérdida de ganancia por venta al COSTO</td>
+                          <td class="num">{formatMoney(cuadre.perdida_ganancia)}</td>
+                        </tr>
+                        <tr>
+                          <td>Venta Real</td>
+                          <td class="num">{formatMoney(cuadre.venta_real)}</td>
+                        </tr>
+                        <tr>
+                          <td>Total de Venta al Precio de Costo</td>
+                          <td class="num">{formatMoney(cuadre.venta_costo)}</td>
+                        </tr>
+                        <tr class="destacada">
+                          <td>Utilidad Bruta</td>
+                          <td class="num">{formatMoney(cuadre.utilidad_bruta)}</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            Gastos Semanal
+                            <small class="muted">salarios {formatMoney(cuadre.gastos.salarios)} · carros y otros {formatMoney(cuadre.gastos.transporte)}</small>
+                          </td>
+                          <td class="num exit">{formatMoney(cuadre.gastos.operativos)}</td>
+                        </tr>
+                        <tr>
+                          <td>ONAT y Arrendamiento</td>
+                          <td class="num exit">{formatMoney(cuadre.gastos.onat + cuadre.gastos.arrendamiento)}</td>
+                        </tr>
+                        {#if cuadre.gastos.contador}
+                          <tr><td>Contador</td><td class="num exit">{formatMoney(cuadre.gastos.contador)}</td></tr>
+                        {/if}
+                        {#if cuadre.gastos.otros}
+                          <tr><td>Otros gastos</td><td class="num exit">{formatMoney(cuadre.gastos.otros)}</td></tr>
+                        {/if}
+                        <tr>
+                          <td>Pago de Estimulación</td>
+                          <td class="num exit">{formatMoney(cuadre.gastos.estimulacion)}</td>
+                        </tr>
+                        <tr class="destacada">
+                          <td>Utilidad Neta</td>
+                          <td class="num">{formatMoney(cuadre.utilidad_neta)}</td>
+                        </tr>
+                        <tr>
+                          <td>Reserva ({cuadre.reserva_pct}%)</td>
+                          <td class="num">{formatMoney(cuadre.reserva)}</td>
+                        </tr>
+                        <tr class="destacada">
+                          <td>Dividendos a Repartir</td>
+                          <td class="num">{formatMoney(cuadre.dividendos)}</td>
+                        </tr>
+                        <tr>
+                          <td>Entre {cuadre.socios}</td>
+                          <td class="num">{formatMoney(cuadre.por_socio)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {#if cuadre.pago_por_socio && Object.keys(cuadre.pago_por_socio).length}
+                    <h3>Ganancia individual</h3>
+                    <p class="muted">Su parte de los dividendos menos lo que ya retiró en el período.</p>
+                    <div class="report-card">
+                      <div class="report-meta">
+                        {#each Object.entries(cuadre.pago_por_socio) as [socio, monto] (socio)}
+                          <span>{socio}: <strong>{formatMoney(monto)}</strong></span>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                </article>
+
+                <!-- Tabla día a día (columnas A7:Q17 de la hoja). -->
+                {#if cuadre.dias?.length}
+                  <article class="panel-card">
+                    <h2>Detalle por día</h2>
+                    <div class="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Día</th><th>Fecha</th><th>Venta diaria</th><th>Transferencia</th>
+                            <th>Salarios</th><th>Carros y otros</th><th>Pagos de caja</th>
+                            <th>Retiros de socios</th><th>Faltante</th>
+                            <th>Pérdida de ganancia</th><th>Elevación de precios</th>
+                            <th>Sobrante</th><th>Efectivo</th><th>Venta x libreta</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each cuadre.dias as d (d.fecha)}
+                            <tr>
+                              <td data-label="Día">{d.dia}</td>
+                              <td data-label="Fecha">{d.fecha}</td>
+                              <td data-label="Venta diaria">{formatMoney(d.venta_diaria)}</td>
+                              <td data-label="Transferencia">{formatMoney(d.transferencia)}</td>
+                              <td data-label="Salarios">{formatMoney(d.salarios)}</td>
+                              <td data-label="Carros y otros">{formatMoney(d.transporte)}</td>
+                              <td data-label="Pagos de caja">{formatMoney(d.pagos_caja)}</td>
+                              <td data-label="Retiros de socios">{formatMoney(d.individual_total)}</td>
+                              <td data-label="Faltante">{d.faltante ? formatMoney(d.faltante) : '—'}</td>
+                              <td data-label="Pérdida de ganancia">{formatMoney(d.perdida_ganancia)}</td>
+                              <td data-label="Elevación de precios">{formatMoney(d.ganancia_elevacion)}</td>
+                              <td data-label="Sobrante">{d.sobrante ? formatMoney(d.sobrante) : '—'}</td>
+                              <td data-label="Efectivo"><strong>{formatMoney(d.efectivo)}</strong></td>
+                              <td data-label="Venta x libreta">{formatMoney(d.venta_libreta)}</td>
+                            </tr>
+                          {/each}
+                          <tr class="total-row">
+                            <td data-label="Día"><strong>TOTAL</strong></td>
+                            <td data-label="Fecha">Cierre</td>
+                            <td data-label="Venta diaria"><strong>{formatMoney(cuadreTotalDias.venta)}</strong></td>
+                            <td data-label="Transferencia"><strong>{formatMoney(cuadreTotalDias.transf)}</strong></td>
+                            <td data-label="Salarios"><strong>{formatMoney(cuadreTotalDias.sal)}</strong></td>
+                            <td data-label="Carros y otros"><strong>{formatMoney(cuadreTotalDias.tra)}</strong></td>
+                            <td data-label="Pagos de caja"><strong>{formatMoney(cuadreTotalDias.pag)}</strong></td>
+                            <td data-label="Retiros de socios"><strong>{formatMoney(cuadreTotalDias.ind)}</strong></td>
+                            <td data-label="Faltante"><strong>{formatMoney(cuadreTotalDias.falt)}</strong></td>
+                            <td data-label="Pérdida de ganancia"><strong>{formatMoney(cuadreTotalDias.pg)}</strong></td>
+                            <td data-label="Elevación de precios"><strong>{formatMoney(cuadreTotalDias.ge)}</strong></td>
+                            <td data-label="Sobrante"><strong>{formatMoney(cuadreTotalDias.sob)}</strong></td>
+                            <td data-label="Efectivo"><strong>{formatMoney(cuadreTotalDias.efe)}</strong></td>
+                            <td data-label="Venta x libreta"><strong>{formatMoney(cuadreTotalDias.lib)}</strong></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                {/if}
+
+                <!-- Cálculo de la estimulación, paso a paso (Q23:T29). -->
+                {#if cuadre.estimulacion}
+                  {@const es = cuadre.estimulacion}
+                  <article class="panel-card">
+                    <h2>Pago de estimulación</h2>
+                    <div class="table-wrap">
+                      <table class="cuadre-pl">
+                        <tbody>
+                          <tr><td>Total ventas</td><td class="num">{formatMoney(es.total_ventas)}</td></tr>
+                          <tr><td>− Base</td><td class="num exit">{formatMoney(es.base)}</td></tr>
+                          <tr><td>=</td><td class="num">{formatMoney(es.sub_base)}</td></tr>
+                          <tr><td>− Pérdida de ganancia</td><td class="num exit">{formatMoney(es.perdida_ganancia)}</td></tr>
+                          <tr><td>=</td><td class="num">{formatMoney(es.sub_perdida)}</td></tr>
+                          <tr><td>− Ventas al costo</td><td class="num exit">{formatMoney(es.ventas_costo)}</td></tr>
+                          <tr><td>=</td><td class="num">{formatMoney(es.base_final)}</td></tr>
+                          <tr class="destacada"><td>× {es.pct}%</td><td class="num">{formatMoney(es.importe)}</td></tr>
+                          <tr><td>Entre 4</td><td class="num">{formatMoney(es.entre_4)}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                {/if}
+
+                <!-- Reparto del efectivo (bloque "Desglose Semanal", E35:G54). -->
+                {#if cuadre.desglose_semanal}
+                  {@const g = cuadre.desglose_semanal}
+                  <article class="panel-card">
+                    <h2>Desglose semanal del efectivo</h2>
+                    <p class="muted">A dónde va el efectivo de la caja y cuánto queda para el bazar.</p>
+                    <div class="table-wrap">
+                      <table class="cuadre-pl">
+                        <tbody>
+                          <tr class="destacada">
+                            <td>Importe de efectivo</td>
+                            <td class="num">{formatMoney(g.importe_efectivo)}</td>
+                          </tr>
+                          {#each g.consignadores as c (c.consignador)}
+                            <tr>
+                              <td>
+                                − {c.consignador}
+                                {#if c.entregado}
+                                  <small class="muted">le toca {formatMoney(c.a_pagar)} · ya se le entregó {formatMoney(c.entregado)}</small>
+                                {/if}
+                              </td>
+                              <td class="num exit">{formatMoney(c.neto)}</td>
+                            </tr>
+                          {/each}
+                          <tr><td>− Cuentas por pagar</td><td class="num exit">{formatMoney(g.cuentas_por_pagar)}</td></tr>
+                          <tr><td>− Reserva ({g.reserva_pct}%)</td><td class="num exit">{formatMoney(g.reserva)}</td></tr>
+                          <tr><td>− ONAT y Arrendamiento</td><td class="num exit">{formatMoney(g.onat_arrendamiento)}</td></tr>
+                          <tr><td>− Estimulación</td><td class="num exit">{formatMoney(g.estimulacion)}</td></tr>
+                          {#each Object.entries(g.pago_por_socio) as [socio, monto] (socio)}
+                            <tr><td>− Pago {socio}</td><td class="num exit">{formatMoney(monto)}</td></tr>
+                          {/each}
+                          <tr class="destacada">
+                            <td>= Total del bazar</td>
+                            <td class="num">{formatMoney(g.total_bazar)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </article>
+                {/if}
+
+                <!-- Bloque "CUADRE ESPECIAL" (A35:C51) + inventario por categoría. -->
+                {#if cuadre.cuadre_especial}
+                  {@const ce = cuadre.cuadre_especial}
+                  <article class="panel-card">
+                    <h2>Cuadre especial</h2>
+                    <div class="report-card">
+                      <div class="report-meta">
+                        <span>
+                          Inicio de semana:
+                          <strong>{ce.inicio_semana != null ? formatMoney(ce.inicio_semana) : '—'}</strong>
+                        </span>
+                        <span>Entradas semanal: <strong>{formatMoney(ce.entradas_semana)}</strong></span>
+                        <span>
+                          Total semanal:
+                          <strong>{ce.total_semana != null ? formatMoney(ce.total_semana) : '—'}</strong>
+                        </span>
+                      </div>
+                      {#if ce.inicio_semana == null}
+                        <p class="muted">
+                          El inicio de semana sale de la foto de stock del último cierre. Aún no hay
+                          ninguna anterior a esta fecha.
+                        </p>
+                      {/if}
+                    </div>
+
+                    <div class="cuadre-cols">
+                      <div>
+                        <h3>Desglose de entradas del bazar</h3>
+                        <div class="table-wrap">
+                          <table>
+                            <thead><tr><th>Categoría</th><th>Importe (costo)</th></tr></thead>
+                            <tbody>
+                              {#if !ce.entradas_por_categoria.length}
+                                <tr class="table-empty-row"><td colspan="2"><div class="empty-state">Sin entradas en el período.</div></td></tr>
+                              {:else}
+                                {#each ce.entradas_por_categoria as c (c.categoria)}
+                                  <tr>
+                                    <td data-label="Categoría">{c.categoria}</td>
+                                    <td data-label="Importe (costo)">{formatMoney(c.valor)}</td>
+                                  </tr>
+                                {/each}
+                                <tr class="total-row">
+                                  <td data-label="Categoría"><strong>TOTAL</strong></td>
+                                  <td data-label="Importe (costo)"><strong>{formatMoney(ce.entradas_semana)}</strong></td>
+                                </tr>
+                              {/if}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3>Total efectivo bazar (mercancía en stock)</h3>
+                        <div class="table-wrap">
+                          <table>
+                            <thead><tr><th>Categoría</th><th>Importe (costo)</th></tr></thead>
+                            <tbody>
+                              {#each ce.inventario_por_categoria as c (c.categoria)}
+                                <tr>
+                                  <td data-label="Categoría">{c.categoria}</td>
+                                  <td data-label="Importe (costo)">{formatMoney(c.valor)}</td>
+                                </tr>
+                              {/each}
+                              <tr class="total-row">
+                                <td data-label="Categoría"><strong>TOTAL</strong></td>
+                                <td data-label="Importe (costo)"><strong>{formatMoney(ce.inventario_total)}</strong></td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                {/if}
+
+                <!-- Datos propios del sistema que el Excel no trae. -->
+                <article class="panel-card">
+                  <h2>Información adicional</h2>
                   <div class="report-card">
                     <div class="report-meta">
-                      <span>Venta total (incl. consignación): <strong>{formatMoney(cuadre.venta_total)}</strong></span>
+                      <span>Venta cobrada: <strong>{formatMoney(cuadre.venta_total)}</strong></span>
                       <span>· Propia: <strong>{formatMoney(cuadre.venta_propia)}</strong></span>
                       <span>· Consignación: <strong>{formatMoney(cuadre.venta_consignacion)}</strong></span>
                     </div>
                     <div class="report-meta">
                       <span>Efectivo: <strong>{formatMoney(cuadre.efectivo)}</strong></span>
                       <span>Transferencia: <strong>{formatMoney(cuadre.transferencia)}</strong></span>
-                    </div>
-                    <div class="report-meta">
-                      <span>Pérdida de ganancia: <strong>{formatMoney(cuadre.perdida_ganancia)}</strong> <span class="muted">(indicador)</span></span>
-                      <span>Venta real (cobrada): <strong>{formatMoney(cuadre.venta_real)}</strong></span>
-                      <span>Venta al costo: <strong>{formatMoney(cuadre.venta_costo)}</strong></span>
                       <span>Vendido a precio de costo: <strong>{formatMoney(cuadre.ventas_al_costo ?? 0)}</strong></span>
-                      <span>Utilidad bruta: <strong>{formatMoney(cuadre.utilidad_bruta)}</strong></span>
                     </div>
                   </div>
-
-                  <div class="report-card">
-                    <div class="report-meta">
-                      <span>− Salarios: <strong class="report-delta exit">{formatMoney(cuadre.gastos.salarios)}</strong></span>
-                      <span>− Transporte: <strong class="report-delta exit">{formatMoney(cuadre.gastos.transporte)}</strong></span>
-                      <span>− ONAT/Arriendo: <strong class="report-delta exit">{formatMoney(cuadre.gastos.onat + cuadre.gastos.arrendamiento)}</strong></span>
-                      <span>− Contador: <strong class="report-delta exit">{formatMoney(cuadre.gastos.contador)}</strong></span>
-                      <span>− Otros gastos: <strong class="report-delta exit">{formatMoney(cuadre.gastos.otros)}</strong></span>
-                      <span>− Estimulación: <strong class="report-delta exit">{formatMoney(cuadre.gastos.estimulacion)}</strong></span>
-                    </div>
-                    <div class="report-meta">
-                      <span>Total gastos descontados: <strong class="report-delta exit">{formatMoney(cuadre.gastos.total_descontado)}</strong></span>
-                      {#if cuadre.gastos.individual}
-                        <span class="muted">Individual (reparto a socios, no descuenta): {formatMoney(cuadre.gastos.individual)}</span>
-                      {/if}
-                    </div>
-                    <div class="report-meta">
-                      <span><strong>Utilidad neta: {formatMoney(cuadre.utilidad_neta)}</strong></span>
-                    </div>
-                  </div>
-
-                  <div class="report-card">
-                    <div class="report-meta">
-                      <span>Reserva ({cuadre.reserva_pct}%): <strong>{formatMoney(cuadre.reserva)}</strong></span>
-                      <span>Dividendos: <strong>{formatMoney(cuadre.dividendos)}</strong></span>
-                      <span>Por socio ({cuadre.socios}): <strong>{formatMoney(cuadre.por_socio)}</strong></span>
-                    </div>
-                    {#if cuadre.pago_por_socio && Object.keys(cuadre.pago_por_socio).length}
-                      <div class="report-meta">
-                        <span class="muted">Pago neto (su parte − lo que ya retiró):</span>
-                        {#each Object.entries(cuadre.pago_por_socio) as [socio, monto] (socio)}
-                          <span>{socio}: <strong>{formatMoney(monto)}</strong></span>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-
                   <div class="report-card">
                     <div class="report-meta">
                       <span>Ingresos (cobros): <strong>{formatMoney(cuadre.movimientos.ingresos)}</strong></span>
@@ -3209,6 +3480,48 @@
   }
   .total-row td {
     background: var(--surface-strong);
+  }
+
+  /* ── Tablas del cuadre (replican la hoja del Excel) ────────────────────── */
+  /* Dos columnas: concepto a la izquierda, importe alineado a la derecha. */
+  .cuadre-pl td:first-child {
+    display: grid;
+    gap: 2px;
+  }
+  .cuadre-pl td.num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    width: 1%;
+  }
+  .cuadre-pl td.num.exit {
+    color: var(--danger, #d64545);
+  }
+  .cuadre-pl tr.destacada td {
+    background: var(--surface-strong);
+    font-weight: 800;
+  }
+  .cuadre-pl small.muted {
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .cuadre-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+  /* Solo dos columnas: sin esto heredan el min-width general de las tablas
+     (880px) y el importe se salía de la vista dentro de la columna. */
+  .cuadre-pl,
+  .cuadre-cols table {
+    min-width: 0;
+  }
+  .cuadre-cols th:last-child,
+  .cuadre-cols td:last-child {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   .badge {

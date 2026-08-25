@@ -11,9 +11,8 @@
 
   let estado = $state<CajaEstado[]>([])
 
-  // Modal: abrir caja
-  let openNumero = $state<number | null>(null)
-  let aperturaEfectivo = $state<number | null>(50000)
+  // Caja que se está abriendo (para no dejar pulsar dos veces el mismo botón).
+  let abriendo = $state<number | null>(null)
 
   // Modal: detalle + cierre de una caja abierta
   let detail = $state<Caja | null>(null)
@@ -51,22 +50,20 @@
     cierreObs = ''
   }
 
-  function pedirApertura(numero: number) {
-    openNumero = numero
-    aperturaEfectivo = 50000
-  }
-
-  async function abrir(e: SubmitEvent) {
-    e.preventDefault()
-    if (openNumero == null) return
+  // La caja se abre directamente: ya no se declara efectivo inicial, siempre
+  // arranca en cero y el esperado se calcula solo con los movimientos del turno.
+  async function abrir(numero: number) {
+    if (abriendo != null) return
+    abriendo = numero
     try {
-      const caja = await api.cajas.abrir(openNumero, Number(aperturaEfectivo) || 0)
-      openNumero = null
+      const caja = await api.cajas.abrir(numero, 0)
       workingCaja.set(caja)
       await refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'No se pudo abrir la caja.')
       await refresh()
+    } finally {
+      abriendo = null
     }
   }
 
@@ -106,7 +103,7 @@
   }
 
   $effect(() => {
-    document.body.classList.toggle('modal-open', openNumero != null || !!detail || confirmCierre)
+    document.body.classList.toggle('modal-open', !!detail || confirmCierre)
   })
 
   onMount(refresh)
@@ -127,8 +124,7 @@
       <div>
         Trabajando en <strong>Caja {$workingCaja.numero}</strong>
         <div class="muted">
-          Abrió {$workingCaja.abierta_por || '—'} · ${money($workingCaja.efectivo_inicial)} ·
-          {formatDateTime($workingCaja.fecha_apertura)}
+          Abrió {$workingCaja.abierta_por || '—'} · {formatDateTime($workingCaja.fecha_apertura)}
         </div>
       </div>
     {:else}
@@ -152,7 +148,6 @@
             <span class="estado abierta">Abierta</span>
           </div>
           <div class="caja-info">
-            <div>Abierta con <strong>${money(c.efectivo_inicial)}</strong></div>
             <div>Hora: <strong>{formatDateTime(c.fecha_apertura)}</strong></div>
             <div>Por: <strong>{c.abierta_por || '—'}</strong></div>
           </div>
@@ -168,7 +163,7 @@
             <span class="estado abrir">Reabrir</span>
           </div>
           <div class="caja-info">
-            <div>Abrió <strong>{h.abierta_por || '—'}</strong> con <strong>${money(h.efectivo_inicial)}</strong></div>
+            <div>Abrió <strong>{h.abierta_por || '—'}</strong></div>
             <div>Cerrada: <strong>{formatDateTime(h.fecha_cierre)}</strong></div>
             {#if h.observacion}<div>{h.observacion}</div>{/if}
           </div>
@@ -176,13 +171,20 @@
           <span class="caja-action abrir">Reabrir caja</span>
         </button>
       {:else}
-        <button class="caja-card cerrada" type="button" onclick={() => pedirApertura(e.numero)}>
+        <button
+          class="caja-card cerrada"
+          type="button"
+          disabled={abriendo != null}
+          onclick={() => abrir(e.numero)}
+        >
           <div class="caja-card-head">
             <h3>{e.nombre}</h3>
             <span class="estado abrir">Abrir</span>
           </div>
           <p class="muted">Cerrada. Pulsa para abrirla.</p>
-          <span class="caja-action abrir">Abrir caja</span>
+          <span class="caja-action abrir">
+            {abriendo === e.numero ? 'Abriendo…' : 'Abrir caja'}
+          </span>
         </button>
       {/if}
     {/each}
@@ -190,31 +192,6 @@
 
   {#if cierreMsg}
     <p class="cierre-msg" role="status">{cierreMsg}</p>
-  {/if}
-</div>
-
-<!-- Modal: abrir caja -->
-<button class="backdrop" class:show={openNumero != null} aria-label="Cerrar" onclick={() => (openNumero = null)}></button>
-<div class="modal" class:show={openNumero != null}>
-  {#if openNumero != null}
-    <div class="modal-card big">
-      <div class="modal-head">
-        <h2>Abriendo caja {openNumero}</h2>
-        <button class="btn-outline" type="button" onclick={() => (openNumero = null)}>Cerrar</button>
-      </div>
-      <div class="modal-body">
-        <form class="cierre-form" onsubmit={abrir}>
-          <label>
-            Efectivo inicial
-            <input type="number" min="0" step="0.01" bind:value={aperturaEfectivo} required />
-          </label>
-          <div class="footer-actions">
-            <button class="btn-soft" type="button" onclick={() => (openNumero = null)}>Cancelar</button>
-            <button class="btn-primary" type="submit">Abrir caja {openNumero}</button>
-          </div>
-        </form>
-      </div>
-    </div>
   {/if}
 </div>
 
@@ -236,7 +213,9 @@
           <strong class="value">${money(totalVenta)}</strong>
         </div>
         <div class="desglose-grid">
-          <div class="desglose-card"><div class="label">Efectivo inicial</div><div class="value">${money(desglose.efectivo_inicial)}</div></div>
+          {#if desglose.efectivo_inicial}
+            <div class="desglose-card"><div class="label">Efectivo inicial</div><div class="value">${money(desglose.efectivo_inicial)}</div></div>
+          {/if}
           <div class="desglose-card entry"><div class="label">+ Ventas efectivo</div><div class="value">${money(desglose.ventas_efectivo)}</div></div>
           <div class="desglose-card entry"><div class="label">+ Ingresos (cobros)</div><div class="value">${money(desglose.ingresos)}</div></div>
           <div class="desglose-card"><div class="label">Ventas transferencia</div><div class="value">${money(desglose.ventas_transferencia)}</div></div>
@@ -551,7 +530,6 @@
     color: var(--primary);
   }
 
-  .btn-primary,
   .btn-danger,
   .btn-outline,
   .btn-soft,
@@ -565,10 +543,6 @@
     transition:
       transform var(--duration-fast) var(--ease-smooth),
       box-shadow var(--duration-base) var(--ease-smooth);
-  }
-  .btn-primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary-strong));
-    color: #fff;
   }
   .btn-danger {
     background: linear-gradient(135deg, var(--danger), #ef4444);
@@ -589,7 +563,6 @@
     border-color: var(--border);
     color: var(--text);
   }
-  .btn-primary:hover,
   .btn-danger:hover,
   .btn-outline:hover,
   .btn-soft:hover,
@@ -707,7 +680,6 @@
       max-width: 100%;
       border-radius: 14px;
     }
-    .footer-actions .btn-primary,
     .footer-actions .btn-danger,
     .footer-actions .btn-soft,
     .footer-actions .btn-success {

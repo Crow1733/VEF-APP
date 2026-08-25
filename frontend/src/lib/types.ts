@@ -167,6 +167,8 @@ export interface Movimiento {
   es_extraccion: number
   es_compra_mercancia: number
   responsable: string | null
+  /** Si la extracción se registró a nombre de un consignador, su nombre. */
+  consignador?: string | null
   _offline?: boolean
 }
 
@@ -498,6 +500,75 @@ export interface CuadreReporte {
   /** Pago neto a cada socio: su parte menos lo que ya retiró (I21/J21). */
   pago_por_socio?: Record<string, number>
   individual_por_socio?: Record<string, number>
+  ganancia_elevacion?: number
+  venta_libreta?: number
+  cobros_libreta?: number
+  transferencia_por_socio?: Record<string, number>
+  // ── Bloques con la misma estructura que la hoja del Excel ──
+  dias?: CuadreDia[]
+  estimulacion?: CuadreEstimulacion
+  desglose_semanal?: CuadreDesglose
+  cuadre_especial?: CuadreEspecial
+}
+
+/** Una fila de la tabla diaria (columnas A7:Q17 de la hoja). */
+export interface CuadreDia {
+  dia: string
+  fecha: string
+  /** Venta valorada a precio de lista, como la columna C del Excel. */
+  venta_diaria: number
+  venta_cobrada: number
+  transferencia: number
+  transferencia_socio: Record<string, number>
+  salarios: number
+  transporte: number
+  pagos_caja: number
+  individual: Record<string, number>
+  individual_total: number
+  extracciones: number
+  faltante: number
+  sobrante: number
+  perdida_ganancia: number
+  ganancia_elevacion: number
+  efectivo: number
+  venta_libreta: number
+}
+
+/** Cálculo de la estimulación paso a paso (bloque Q23:T29). */
+export interface CuadreEstimulacion {
+  total_ventas: number
+  base: number
+  sub_base: number
+  perdida_ganancia: number
+  sub_perdida: number
+  ventas_costo: number
+  base_final: number
+  pct: number
+  importe: number
+  entre_4: number
+}
+
+/** Distribución del efectivo (bloque "Desglose Semanal", E35:G54). */
+export interface CuadreDesglose {
+  importe_efectivo: number
+  consignadores: { consignador: string; a_pagar: number; entregado: number; neto: number }[]
+  cuentas_por_pagar: number
+  reserva: number
+  reserva_pct: number
+  onat_arrendamiento: number
+  estimulacion: number
+  pago_por_socio: Record<string, number>
+  total_bazar: number
+}
+
+/** Bloque "CUADRE ESPECIAL" (A35:C51) e inventario por categoría (J48:K60). */
+export interface CuadreEspecial {
+  inicio_semana: number | null
+  entradas_semana: number
+  total_semana: number | null
+  entradas_por_categoria: { categoria: string; valor: number }[]
+  inventario_por_categoria: { categoria: string; valor: number }[]
+  inventario_total: number
 }
 
 // ── Movimientos de caja (libro / ledger) ─────────────────────────────────────
@@ -636,11 +707,23 @@ export interface ConsignacionLiquidacion {
   a_pagar: number
   venta: number
   utilidad_bazar: number
+  /** Dinero ya entregado en el período (extracciones a su nombre). */
+  adelantos: number
+  num_adelantos: number
+  /** Lo que queda por entregarle: a_pagar − ya entregado. Negativo = se le pasó. */
+  neto_a_pagar: number
 }
 
 export interface ConsignacionReporte {
   consignadores: ConsignacionLiquidacion[]
-  total: { unidades: number; a_pagar: number; venta: number; utilidad_bazar: number }
+  total: {
+    unidades: number
+    a_pagar: number
+    venta: number
+    utilidad_bazar: number
+    adelantos: number
+    neto_a_pagar: number
+  }
 }
 
 // ── Inventario valorado (Capa 2 / "IMPORTE EN MERCANCIA" del cuadre) ──────────

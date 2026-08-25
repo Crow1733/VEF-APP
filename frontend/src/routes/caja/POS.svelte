@@ -107,7 +107,7 @@
 
   const statusLine = $derived(
     $workingCaja
-      ? `Trabajando en Caja ${$workingCaja.numero} · abierta con $${money($workingCaja.efectivo_inicial)}.`
+      ? `Trabajando en Caja ${$workingCaja.numero}.`
       : "Selecciona una caja en 'Caja actual' para empezar a vender.",
   )
 

@@ -77,6 +77,9 @@ _MIGRATIONS = [
     ("pagos_deuda", "cantidad", "REAL"),
     ("pagos_deuda", "precio_costo", "REAL"),
     ("pagos_deuda", "precio_vendido", "REAL"),
+    # Extracción anotada a nombre de un consignador, para descontarla de lo
+    # que se le liquida al final de la semana.
+    ("movimientos_caja", "consignador", "TEXT"),
 ]
 
 
