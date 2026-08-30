@@ -1884,6 +1884,12 @@
                               <td data-label="Acciones">
                                 {#if m.relacionado_tipo}
                                   <span class="muted" title="Se elimina desde su apartado de origen">Ligado a {m.relacionado_tipo}</span>
+                                {:else if m.es_extraccion}
+                                  <!-- Las extracciones se borran desde su propia pestaña, para no
+                                       tener el mismo borrado repartido en dos sitios. -->
+                                  <span class="muted" title="Se elimina desde la pestaña Extracciones">
+                                    Ver en Extracciones
+                                  </span>
                                 {:else}
                                   <button class="btn danger" onclick={() => deleteMovimiento(m)}>Eliminar</button>
                                 {/if}
