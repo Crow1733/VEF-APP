@@ -171,6 +171,36 @@
   )
   const gastosTotal = $derived(gastos.reduce((s, g) => s + g.monto, 0))
 
+  /**
+   * Existencias producto a producto, para el pase de inventario. Por defecto
+   * deja fuera lo que está en cero: en el conteo físico solo interesa lo que
+   * de verdad está en el estante.
+   */
+  const existencias = $derived.by(() => {
+    const q = invBusqueda.trim().toLowerCase()
+    return productos
+      .filter((p) => p.activa)
+      .filter((p) => (invSoloConStock ? p.stock_actual > 0 : true))
+      .filter((p) => invCatExistencia === 'all' || String(p.categoria_id) === invCatExistencia)
+      .filter((p) => !q || p.nombre.toLowerCase().includes(q) || (p.codigo ?? '').toLowerCase().includes(q))
+      .slice()
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  })
+
+  const categoriaNombre = (id: number) => categorias.find((c) => c.id === id)?.nombre ?? '—'
+
+  const existenciasTotal = $derived.by(() =>
+    existencias.reduce(
+      (t, p) => ({
+        productos: t.productos + 1,
+        unidades: t.unidades + p.stock_actual,
+        costo: t.costo + p.stock_actual * p.costo,
+        venta: t.venta + p.stock_actual * p.precio_venta,
+      }),
+      { productos: 0, unidades: 0, costo: 0, venta: 0 },
+    ),
+  )
+
   // ── Consignaciones (liquidación por proveedor) ──────────────────────────────
   let consigData = $state<ConsignacionReporte | null>(null)
   let consigFilter = $state<'week' | 'month' | 'all'>('week')
@@ -240,6 +270,20 @@
 
   // ── Bajas / Entradas (movimientos de inventario) ────────────────────────────
   let invMovData = $state<InventarioMovimientos | null>(null)
+  // Gastos: filtro por rango de fechas (el backend ya acepta desde/hasta).
+  let gastoFilter = $state<'week' | 'month' | 'all'>('all')
+  let gastoRange = $state<{ from: string; to: string } | null>(null)
+  let gastoFrom = $state('')
+  let gastoTo = $state('')
+  let gastoTipo = $state<string>('all')
+
+  // Inventario: "valorado" resume por categoría; "existencia" lista producto a
+  // producto para hacer el conteo físico.
+  let invModo = $state<'valorado' | 'existencia'>('valorado')
+  let invSoloConStock = $state(true)
+  let invBusqueda = $state('')
+  let invCatExistencia = $state<string>('all')
+
   let invFilter = $state<'week' | 'month' | 'all'>('month')
   let invRange = $state<{ from: string; to: string } | null>(null)
   let invFrom = $state('')
@@ -430,13 +474,27 @@
   })
 
   async function loadGastos() {
-    gastos = await api.gastos.listar()
+    const { desde, hasta } = rangoDe(gastoFilter, gastoRange)
+    gastos = await api.gastos.listar(desde, hasta, gastoTipo === 'all' ? null : gastoTipo)
   }
 
-  // Carga los gastos al entrar a su sub-pestaña.
+  function applyGastoRange() {
+    if (gastoFrom && gastoTo) gastoRange = { from: gastoFrom, to: gastoTo }
+  }
+  function setGastoQuick(f: 'week' | 'month' | 'all') {
+    gastoFilter = f
+    gastoRange = null
+    gastoFrom = ''
+    gastoTo = ''
+  }
+
+  // Carga los gastos al entrar a su sub-pestaña o al cambiar los filtros.
   $effect(() => {
     if (!ready) return
     if (activeTab !== 'economia' || activeEconomia !== 'gastos') return
+    void gastoFilter
+    void gastoRange
+    void gastoTipo
     loadGastos()
   })
 
@@ -460,6 +518,38 @@
     gSocio = ''
     gFecha = ''
     await loadGastos()
+  }
+
+  async function loadMovimientosCache() {
+    movimientos = await api.movimientos.listar()
+  }
+
+  // Recarga las extracciones al entrar a su sub-pestaña: se cargaban una sola
+  // vez al abrir el panel, así que una extracción hecha desde caja mientras
+  // tanto no aparecía hasta recargar la página entera.
+  $effect(() => {
+    if (!ready) return
+    if (activeTab !== 'economia' || activeEconomia !== 'extracciones') return
+    loadMovimientosCache()
+  })
+
+  function deleteExtraccion(m: Movimiento) {
+    showConfirm({
+      title: `Eliminar extracción #${m.id}`,
+      text:
+        `Se eliminará "${m.concepto || 'Extracción de caja'}" (${formatMoney(m.monto)}) de la caja ` +
+        `${m.caja_id ?? '—'}. El efectivo esperado se recalcula sin ella. Esta acción no se puede deshacer.`,
+      okLabel: 'Sí, eliminar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.movimientos.eliminar(Number(m.id))
+          await loadMovimientosCache()
+        } catch (e) {
+          alert((e as Error).message)
+        }
+      },
+    })
   }
 
   function deleteGasto(g: Gasto) {
@@ -1958,6 +2048,12 @@
                         <div class="report-meta">
                           <span>{m.concepto || 'Sin motivo'}</span>
                           {#if m.responsable}<span>Responsable: {m.responsable}</span>{/if}
+                          {#if m.consignador}<span class="badge visible">A nombre de {m.consignador}</span>{/if}
+                        </div>
+                        <div class="row-actions">
+                          <button class="btn danger" type="button" onclick={() => deleteExtraccion(m)}>
+                            Eliminar
+                          </button>
                         </div>
                       </div>
                     {/each}
@@ -2081,7 +2177,99 @@
           {#if activeEconomia === 'inventario'}
             <div class="econ-panel active">
               <article class="panel-card">
-                <h2>Inventario valorado</h2>
+                <div class="card-head-row">
+                  <h2>{invModo === 'valorado' ? 'Inventario valorado' : 'Existencia real'}</h2>
+                  <div class="quick-filters">
+                    <button
+                      class="btn filter"
+                      class:active={invModo === 'valorado'}
+                      type="button"
+                      onclick={() => (invModo = 'valorado')}>Resumen por categoría</button
+                    >
+                    <button
+                      class="btn filter"
+                      class:active={invModo === 'existencia'}
+                      type="button"
+                      onclick={() => (invModo = 'existencia')}>Existencia real</button
+                    >
+                  </div>
+                </div>
+
+                {#if invModo === 'existencia'}
+                  <p class="muted">
+                    Producto a producto, para el pase de inventario. Marca lo que cuentes contra esta
+                    lista y ajusta lo que no cuadre desde Productos.
+                  </p>
+                  <div class="filters-grid">
+                    <label>
+                      Buscar
+                      <input type="search" placeholder="Nombre o código" bind:value={invBusqueda} />
+                    </label>
+                    <label>
+                      Categoría
+                      <select bind:value={invCatExistencia}>
+                        <option value="all">Todas</option>
+                        {#each categorias as c (c.id)}
+                          <option value={String(c.id)}>{c.nombre}</option>
+                        {/each}
+                      </select>
+                    </label>
+                    <label class="check-inline">
+                      <input type="checkbox" bind:checked={invSoloConStock} />
+                      <span>Solo con existencia</span>
+                    </label>
+                  </div>
+
+                  <div class="report-card">
+                    <div class="report-meta">
+                      <span>Productos: <strong>{existenciasTotal.productos}</strong></span>
+                      <span>Unidades: <strong>{existenciasTotal.unidades}</strong></span>
+                      <span>Valor costo: <strong>{formatMoney(existenciasTotal.costo)}</strong></span>
+                      <span>Valor venta: <strong>{formatMoney(existenciasTotal.venta)}</strong></span>
+                    </div>
+                  </div>
+
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Producto</th><th>Código</th><th>Categoría</th><th>Existencia</th>
+                          <th>Costo unit.</th><th>Valor costo</th><th>Valor venta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {#if !existencias.length}
+                          <tr class="table-empty-row"><td colspan="7"><div class="empty-state">
+                            {invSoloConStock
+                              ? 'Ningún producto con existencia para este filtro.'
+                              : 'Sin productos para este filtro.'}
+                          </div></td></tr>
+                        {:else}
+                          {#each existencias as p (p.id)}
+                            <tr>
+                              <td data-label="Producto">{p.nombre}</td>
+                              <td data-label="Código">{p.codigo || '—'}</td>
+                              <td data-label="Categoría">{categoriaNombre(p.categoria_id)}</td>
+                              <td data-label="Existencia"><strong>{p.stock_actual}</strong> {p.unidad}</td>
+                              <td data-label="Costo unit.">{formatMoney(p.costo)}</td>
+                              <td data-label="Valor costo">{formatMoney(p.stock_actual * p.costo)}</td>
+                              <td data-label="Valor venta">{formatMoney(p.stock_actual * p.precio_venta)}</td>
+                            </tr>
+                          {/each}
+                          <tr class="total-row">
+                            <td data-label="Producto"><strong>TOTAL</strong></td>
+                            <td data-label="Código"></td>
+                            <td data-label="Categoría"><strong>{existenciasTotal.productos} productos</strong></td>
+                            <td data-label="Existencia"><strong>{existenciasTotal.unidades}</strong></td>
+                            <td data-label="Costo unit."></td>
+                            <td data-label="Valor costo"><strong>{formatMoney(existenciasTotal.costo)}</strong></td>
+                            <td data-label="Valor venta"><strong>{formatMoney(existenciasTotal.venta)}</strong></td>
+                          </tr>
+                        {/if}
+                      </tbody>
+                    </table>
+                  </div>
+                {:else}
                 <p class="muted">Valor de la mercancía en stock (stock × costo), por categoría.</p>
                 <div class="table-wrap">
                   <table>
@@ -2122,6 +2310,7 @@
                     </tbody>
                   </table>
                 </div>
+                {/if}
               </article>
             </div>
           {/if}
@@ -2157,6 +2346,32 @@
                   <div class="card-head-row">
                     <h2>Gastos registrados</h2>
                     <span class="muted">Total: <strong>{formatMoney(gastosTotal)}</strong></span>
+                  </div>
+                  <div class="filters-grid">
+                    <div class="quick-filters">
+                      {#each [['week', 'Última semana'], ['month', 'Último mes'], ['all', 'Todo']] as [f, label] (f)}
+                        <button
+                          class="btn filter"
+                          class:active={gastoFilter === f && !gastoRange}
+                          type="button"
+                          onclick={() => setGastoQuick(f as 'week' | 'month' | 'all')}>{label}</button
+                        >
+                      {/each}
+                    </div>
+                    <div class="date-range">
+                      <label>Desde<input type="date" bind:value={gastoFrom} /></label>
+                      <label>Hasta<input type="date" bind:value={gastoTo} /></label>
+                      <button class="btn" type="button" onclick={applyGastoRange}>Aplicar</button>
+                    </div>
+                    <label>
+                      Tipo
+                      <select bind:value={gastoTipo}>
+                        <option value="all">Todos</option>
+                        {#each GASTO_TIPOS as t (t.value)}
+                          <option value={t.value}>{t.label}</option>
+                        {/each}
+                      </select>
+                    </label>
                   </div>
                   <div class="table-wrap">
                     <table>
@@ -3505,6 +3720,23 @@
     font-weight: 500;
     font-size: 12px;
   }
+  /* Casilla dentro de .filters-grid: sin esto hereda la cuadrícula del label. */
+  .filters-grid label.check-inline {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    align-self: end;
+    padding-bottom: 8px;
+    cursor: pointer;
+  }
+  .filters-grid label.check-inline input {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    accent-color: var(--primary);
+  }
+
   .cuadre-cols {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
