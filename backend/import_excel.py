@@ -1,189 +1,225 @@
-"""
-Lee el Excel y carga todos los productos reales en la BD.
-Ejecutar una sola vez: python import_excel.py
+"""Carga el inventario del Excel semanal en una BD limpia, lista para producción.
+
+    python import_excel.py "/ruta/al/35.1-SEMANA del 30 al 5 septiembre.xlsx"
+
+Estructura de cada hoja de inventario:
+
+    fila 7   No | Costo | Venta | Gan. | Producto | (existencia) | Entra. | Venta | …
+    fila 8   subtítulo de la categoría
+    fila 9+  un producto por fila
+
+Dentro de una hoja hay filas con nombre pero SIN costo ni venta: son cabeceras
+de sub-grupo, no productos. En la hoja de consignación general esas cabeceras
+son además el nombre del consignador, y los productos que siguen son suyos
+hasta la siguiente cabecera.
+
+No se pierde nada en silencio: al final imprime cuántas filas entraron y el
+detalle de cada una que se descartó, con el motivo.
 """
 import sys
+import unicodedata
 from pathlib import Path
+
 import openpyxl
+
 from database import get_conn, init_db
 
+# ── Hoja → (categoría, es_consignación, consignador fijo) ────────────────────
+# consignador None en una hoja de consignación = se toma de las cabeceras.
+HOJAS = {
+    # Propias del bazar
+    "Lienzos y espejos":        ("Lienzos y Espejos",       False, None),
+    "Aseo":                     ("Aseo",                    False, None),
+    "Ceramica y Reloj":         ("Cerámica y Reloj",         False, None),
+    "COSITAS ":                 ("Cositas",                  False, None),
+    "TALABARTERIA ":            ("Talabartería",             False, None),
+    "Madera-Utiles del hogar":  ("Madera-Útiles del hogar",  False, None),
+    "COCINA ":                  ("Cocina",                   False, None),
+    "ARREGLOS FLORALES,BICHOS": ("Arreglos y Bisutería",     False, None),
+    "Electrodomestico Bazar":   ("Electrodomésticos Bazar",  False, None),
+    "Stan Especial":            ("Stan Especial",            False, None),
+    "cuentas xpagar":           ("Cuentas por Pagar",        False, None),
+    # Consignación
+    "Jesus otros":              ("Jesús Bisutería",          True,  "Jesús"),
+    "Jesus ropa calzado":       ("Jesús Ropa y Calzado",     True,  "Jesús"),
+    "Jesus electrodomesticos":  ("Jesús Electrodomésticos",  True,  "Jesús"),
+    "Enrrique":                 ("Enrique Consignación",     True,  "Enrique"),
+    "Sucel":                    ("Sucel Cosméticos",         True,  "Sucel"),
+    "Cusco-Yanley":             ("Cusco-Yanley Joyería",     True,  "Cusco/Yanley"),
+    "CONSIGNACION ":            ("Consignación General",     True,  None),
+}
 
-def find_excel() -> Path:
-    """Localiza el Excel a importar. Se puede pasar la ruta como primer argumento;
-    si no, busca el .xlsx más reciente en la raíz del proyecto o en Exel/."""
+# Cabeceras que son sub-grupos de la propia categoría, no personas. Sin esto se
+# tomarían como cambio de consignador en las hojas que sí lo usan.
+NO_SON_CONSIGNADOR = {"zapatos yanley", "electrodomesticos", "almacenes cuevita",
+                      "cocina jesus"}
+
+FILA_PRIMER_PRODUCTO = 9
+COL_NO, COL_COSTO, COL_VENTA, COL_GAN, COL_NOMBRE, COL_STOCK = 0, 1, 2, 3, 4, 5
+
+
+def num(valor):
+    """El Excel mezcla números, textos y celdas con fórmula vacía."""
+    if valor is None:
+        return None
+    if isinstance(valor, (int, float)):
+        return float(valor)
+    try:
+        return float(str(valor).strip().replace(",", "."))
+    except ValueError:
+        return None
+
+
+def texto(valor):
+    if valor is None:
+        return None
+    s = " ".join(str(valor).split())   # colapsa saltos y espacios dobles
+    return s or None
+
+
+def sin_tildes(s):
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s.lower()) if not unicodedata.combining(c)
+    )
+
+
+def buscar_excel() -> Path:
     if len(sys.argv) > 1:
         p = Path(sys.argv[1])
         if not p.exists():
-            raise FileNotFoundError(f"No existe el archivo: {p}")
+            raise SystemExit(f"No existe el archivo: {p}")
         return p
-    root = Path(__file__).parent.parent
+    raiz = Path(__file__).parent.parent
     candidatos = [
-        x for x in list(root.glob("*.xlsx")) + list((root / "Exel").glob("*.xlsx"))
-        if not x.name.startswith("~$")   # ignora archivos temporales de Excel
+        x for x in list(raiz.glob("*.xlsx")) + list((raiz / "Exel").glob("*.xlsx"))
+        if not x.name.startswith("~$")
     ]
     if not candidatos:
-        raise FileNotFoundError(
-            "No se encontró ningún .xlsx en la raíz del proyecto ni en Exel/"
-        )
-    return max(candidatos, key=lambda p: p.stat().st_mtime)  # el más reciente
+        raise SystemExit("Pasa la ruta del .xlsx como argumento")
+    return max(candidatos, key=lambda p: p.stat().st_mtime)
 
 
-EXCEL_PATH = find_excel()
-
-# ─── Mapeo hoja → (categoría_nombre, tipo, consignador) ──────────────────────
-HOJAS = {
-    # Propias
-    "Aseo":                   ("Aseo",                  "propia",      None),
-    "COSITAS ":               ("Cositas",                "propia",      None),
-    "TALABARTERIA ":          ("Talabartería",            "propia",      None),
-    "COCINA ":                ("Cocina",                 "propia",      None),
-    "Madera-Utiles del hogar":("Madera-Útiles del hogar","propia",      None),
-    "ARREGLOS FLORALES,BICHOS":("Arreglos y Bisutería",  "propia",      None),
-    "Lienzos y espejos":      ("Lienzos y Espejos",      "propia",      None),
-    "Ceramica y Reloj":       ("Cerámica y Reloj",       "propia",      None),
-    "Electrodomestico Bazar": ("Electrodomésticos Bazar","propia",      None),
-    # Consignación
-    "CONSIGNACION ":          ("Consignación General",   "consignacion","Varios"),
-    "Jesus otros":            ("Jesús Bisutería",        "consignacion","Jesús"),
-    "Jesus ropa calzado":     ("Jesús Ropa y Calzado",   "consignacion","Jesús"),
-    "Jesus electrodomesticos":("Jesús Electrodomésticos","consignacion","Jesús"),
-    "Sucel":                  ("Sucel Cosméticos",       "consignacion","Sucel"),
-    "Cusco-Yanley":           ("Cusco-Yanley Joyería",   "consignacion","Cusco/Yanley"),
-}
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def to_num(val):
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-
-def limpia_nombre(val):
-    if val is None:
-        return None
-    s = str(val).strip()
-    return s if s else None
-
-
-def leer_productos_hoja(ws, consignador):
-    """
-    Estructura de cada hoja:
-      Fila 7 (idx 6): encabezados  → No | Costo | Venta | Gan | Producto | Stock | ...
-      Fila 8 (idx 7): sub-título de categoría (ignorar)
-      Fila 9+ (idx 8+): productos
-    Un producto es válido si:
-      - col 0 es número (nro de orden)
-      - col 4 tiene nombre
-      - col 1 (costo) y col 2 (venta) son números o la fila tiene nombre
-    """
+def leer_hoja(ws, hoja, consignador_fijo, es_consignacion, descartes):
+    """Devuelve los productos de una hoja. Anota en `descartes` lo que deja fuera."""
     productos = []
-    filas = list(ws.iter_rows(values_only=True))
+    consignador_actual = consignador_fijo
 
-    for row in filas[8:]:          # desde fila 9
-        num   = to_num(row[0])
-        costo = to_num(row[1])
-        venta = to_num(row[2])
-        gan   = to_num(row[3])
-        nombre = limpia_nombre(row[4])
-        stock  = to_num(row[5]) if len(row) > 5 else None
+    for i, row in enumerate(
+        ws.iter_rows(min_row=FILA_PRIMER_PRODUCTO, values_only=True), FILA_PRIMER_PRODUCTO
+    ):
+        nombre = texto(row[COL_NOMBRE]) if len(row) > COL_NOMBRE else None
+        costo = num(row[COL_COSTO]) if len(row) > COL_COSTO else None
+        venta = num(row[COL_VENTA]) if len(row) > COL_VENTA else None
+        gan = num(row[COL_GAN]) if len(row) > COL_GAN else None
+        stock = num(row[COL_STOCK]) if len(row) > COL_STOCK else None
 
-        # Filtro: debe tener número de orden y nombre
-        if num is None or not nombre:
+        if not nombre:
+            continue                     # fila de relleno (solo el número de orden)
+
+        # Cabecera de sub-grupo: nombre sin precios.
+        if not costo and not venta:
+            if es_consignacion and sin_tildes(nombre) not in NO_SON_CONSIGNADOR:
+                consignador_actual = nombre
+                descartes.append((hoja, i, nombre, f"cabecera de consignador → '{nombre}'"))
+            else:
+                descartes.append((hoja, i, nombre, "cabecera de sub-grupo (sin precios)"))
             continue
-        # Saltar si parece sub-encabezado (nombre muy largo sin precios)
-        if costo is None and venta is None and len(nombre) > 40:
-            continue
 
-        # Calcular ganancia si no está
         if gan is None and costo is not None and venta is not None:
             gan = venta - costo
 
         productos.append({
-            "nombre":       nombre,
-            "costo":        costo or 0,
-            "precio_venta": venta or 0,
-            "ganancia":     gan or 0,
-            "stock":        int(stock) if stock is not None else 0,
-            "consignador":  consignador,
+            "fila": i,
+            "nombre": nombre,
+            "costo": costo or 0.0,
+            "precio_venta": venta or 0.0,
+            "ganancia": gan or 0.0,
+            "stock": stock or 0.0,
+            "consignador": consignador_actual if es_consignacion else None,
         })
+
     return productos
 
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
-
 def run():
+    ruta = buscar_excel()
+    print(f"Excel: {ruta.name}\n")
     init_db()
-    wb = openpyxl.load_workbook(str(EXCEL_PATH), data_only=True)
+    wb = openpyxl.load_workbook(str(ruta), data_only=True)
+
+    descartes = []
+    por_hoja = {}
+
+    for hoja, (cat, es_cons, consignador) in HOJAS.items():
+        if hoja not in wb.sheetnames:
+            print(f"  [FALTA] la hoja {hoja!r} no está en el Excel")
+            continue
+        por_hoja[hoja] = (cat, es_cons, leer_hoja(
+            wb[hoja], hoja, consignador, es_cons, descartes
+        ))
+
+    # Hojas de inventario del Excel que no están en el mapeo: avisar, no ignorar.
+    conocidas = set(HOJAS) | {
+        "CUADRE INICIAL ", "CUADRE DE LA SEMANA ", "CUSCO", "Jesus", "Enrrique,",
+        "Consignacion.", "Sucel.", "Cuentas por pagar", "cuevita.", "Stan Especial.",
+        "Pago de Deudas por Semana ", "Hoja1", "Hoja2", "Hoja3", "Hoja4",
+    }
+    for h in wb.sheetnames:
+        if h not in conocidas:
+            print(f"  [AVISO] hoja sin mapear: {h!r}")
 
     with get_conn() as conn:
-        # Limpiar productos y categorías anteriores (solo las del seed demo)
-        conn.execute("DELETE FROM venta_detalle")
-        conn.execute("DELETE FROM ventas")
-        conn.execute("DELETE FROM movimientos_caja")
-        conn.execute("DELETE FROM compra_detalle")
-        conn.execute("DELETE FROM compras")
-        conn.execute("DELETE FROM consignacion_detalle")
-        conn.execute("DELETE FROM consignaciones")
-        conn.execute("DELETE FROM cajas_config")
-        conn.execute("DELETE FROM cajas")
-        conn.execute("DELETE FROM productos")
-        conn.execute("DELETE FROM categorias")
+        # BD limpia: fuera el catálogo de demo de schema.sql y cualquier operación.
+        for t in ("venta_detalle", "ventas", "movimientos_caja", "compra_detalle",
+                  "compras", "consignacion_detalle", "consignaciones",
+                  "credito_detalle", "pagos_credito", "creditos", "pagos_deuda",
+                  "cuentas_por_pagar", "gastos", "bajas", "stock_snapshots",
+                  "cierres_semanales", "cajas_config", "cajas", "productos",
+                  "categorias"):
+            conn.execute(f"DELETE FROM {t}")
 
-        total_categorias = 0
-        total_productos   = 0
-        cat_map = {}   # nombre → id
-
-        for hoja_nombre, (cat_nombre, tipo, consignador) in HOJAS.items():
-            if hoja_nombre not in wb.sheetnames:
-                print(f"  [SKIP] {hoja_nombre!r} no existe")
-                continue
-
-            ws = wb[hoja_nombre]
-            prods = leer_productos_hoja(ws, consignador)
-            if not prods:
-                print(f"  [SKIP] {hoja_nombre!r} sin productos válidos")
-                continue
-
-            # Insertar categoría si no existe
-            if cat_nombre not in cat_map:
-                es_cons = 1 if tipo == "consignacion" else 0
+        cat_ids = {}
+        total = 0
+        print(f"\n  {'hoja':28}{'categoría':28}{'prod':>6}{'uds':>8}{'costo':>12}")
+        for hoja, (cat, es_cons, prods) in por_hoja.items():
+            if cat not in cat_ids:
                 cur = conn.execute(
                     "INSERT INTO categorias (nombre, tipo, es_consignacion) VALUES (?,?,?)",
-                    (cat_nombre, tipo, es_cons),
+                    (cat, "consignacion" if es_cons else "propia", int(es_cons)),
                 )
-                cat_map[cat_nombre] = cur.lastrowid
-                total_categorias += 1
-
-            cat_id = cat_map[cat_nombre]
-            tipo_prod = "consignacion" if tipo == "consignacion" else "propio"
+                cat_ids[cat] = cur.lastrowid
 
             for p in prods:
                 conn.execute(
                     """INSERT INTO productos
-                       (categoria_id, nombre, tipo_producto, consignador,
-                        costo, precio_venta, ganancia,
-                        stock_inicial, stock_actual, imagen, activa)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                    (cat_id, p["nombre"], tipo_prod, p["consignador"],
-                     p["costo"], p["precio_venta"], p["ganancia"],
-                     p["stock"], p["stock"],
-                     "", 1),
+                       (categoria_id, nombre, tipo_producto, consignador, costo,
+                        precio_venta, ganancia, unidad, stock_inicial, stock_actual,
+                        imagen, activa)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (cat_ids[cat], p["nombre"],
+                     "consignacion" if es_cons else "propio", p["consignador"],
+                     p["costo"], p["precio_venta"], p["ganancia"], "unidad",
+                     p["stock"], p["stock"], "", 1),
                 )
-                total_productos += 1
+            total += len(prods)
+            uds = sum(p["stock"] for p in prods)
+            val = sum(p["stock"] * p["costo"] for p in prods)
+            print(f"  {hoja:28}{cat:28}{len(prods):>6}{uds:>8,.0f}{val:>12,.0f}")
 
-            print(f"  ✓ {hoja_nombre!r} → '{cat_nombre}' ({len(prods)} productos)")
-
-        # Restaurar cajas config (3 cajas fijas con todas las categorías)
-        for caja_id in (1, 2, 3):
-            for cat_id in cat_map.values():
+        # Las 3 cajas ven todas las categorías.
+        for caja in (1, 2, 3):
+            for cid in cat_ids.values():
                 conn.execute(
                     "INSERT OR IGNORE INTO cajas_config (caja_id, categoria_id) VALUES (?,?)",
-                    (caja_id, cat_id),
+                    (caja, cid),
                 )
 
-        print(f"\n✅ Importación completa: {total_categorias} categorías, {total_productos} productos")
+    print(f"\n  {len(cat_ids)} categorías · {total} productos")
+
+    if descartes:
+        print(f"\n  ── {len(descartes)} filas NO importadas ──")
+        for hoja, fila, nombre, motivo in descartes:
+            print(f"     {hoja:26} f{fila:<4} {nombre[:28]:30} {motivo}")
 
 
 if __name__ == "__main__":
